@@ -1,1656 +1,442 @@
-# KINETICSPATIAL
-## Product Requirements Document (PRD)
+EchoPath PRD: Real-Time Audio Navigation for the Visually Impaired
+Oct 10, 2026 · @Reya Attri
 
-**Version:** 1.0  
-**Date:** October 10, 2026  
-**Team:** PonderSonder  
-**Product type:** Accessible sports-training and spatial-navigation platform  
-**Primary platform:** Progressive Web Application (PWA)  
-**Primary audience:** Blind and low-vision runners  
-**Development stage:** Hackathon MVP → Supervised research prototype → Validated product  
-**Status:** Proposed requirements, not yet implemented
+Problem statement
+People who are blind, have low vision, or are walking while distracted have no free, hands-free way to hear what is ahead of them, and from which side, in real time.
 
----
+The gap today
 
-# 1. PRODUCT OVERVIEW
+A white cane finds ground-level obstacles within about a cane's length, but misses head-height hazards (signs, branches, open cabinet doors) and gives no early warning about approaching people or cyclists.
+Guide dogs are life-changing but costly and in short supply.
+Wearable and smart-cane hardware that does obstacle detection typically costs hundreds of dollars and needs a separate device to carry and charge.
+Phone apps that describe scenes (for example Seeing AI or Be My Eyes) are on-demand: the user must point, tap and wait, and many rely on the cloud, so they add latency and fail without signal.
+Why it is solvable now
 
-## 1.1 Product Summary
+Mobile browsers expose the camera (getUserMedia), GPU/WASM inference (WebGPU, WebAssembly) and a head-related spatial audio engine (Web Audio PannerNode with HRTF) with no install.
+Small open detectors (for example YOLO-family nano models, MobileNet-SSD, or RT-DETR variants) run at interactive frame rates on a recent phone, entirely on device.
+Problem in one sentence: how might we turn the phone a user already owns, plus the earphones they already wear, into a continuous, low-latency, private "sense of what is around me" that tells them where things are through sound alone?
 
-KineticSpatial is an AI-powered spatial running companion designed to help blind and visually impaired athletes understand their surroundings, prepare for unfamiliar routes, receive meaningful directional feedback, and independently review their performance.
+Note: vision-impairment prevalence figures (WHO estimates run past 2 billion people with some impairment) should be verified and cited before the pitch.
 
-The system combines computer vision, spatial tracking, predictive movement analysis, binaural audio, optional haptic feedback, and interactive racecourse simulations.
+Vision, goals and non-goals
+Vision: EchoPath is a mobile web app that turns the phone camera into a pair of ears: obstacles and people become directional sounds in the user's headphones, processed entirely on device.
 
-Unlike navigation tools that primarily focus on guiding someone through their immediate surroundings, KineticSpatial connects the entire athletic experience.
+Goals (hackathon MVP)
 
-**Before the run:** Athletes learn the course through CourseDNA and practice navigating it using RaceTwin.
+Open in a mobile browser with no install and start the camera in two taps.
+Detect obstacles and people from live video at 15 FPS or better on a mid-range phone.
+Convert each detection into a left/right/center audio cue within 250 ms of the frame being captured.
+Run all inference locally; no video ever leaves the device.
+Demo a spatial-audio mode where a sound appears to come from the object's direction and gets louder or faster as it nears.
+Goals (V2)
 
-**During the run:** KineticGuide aims to detect paths, estimate spatial movement, identify potential obstacles, and provide contextual feedback during appropriately supervised training.
+Spoken warnings such as "person approaching, left, about three seconds".
+Time-to-contact estimation from object growth between frames.
+Non-goals
 
-**After the run:** Race Memory allows athletes to replay their movements through sound, understand deviations, and prepare for future attempts.
+Replacing a white cane or guide dog. EchoPath is a supplementary aid and must say so.
+Turn-by-turn route navigation or GPS.
+Reading text, signs or faces (out of scope for the hackathon).
+Native iOS/Android apps.
+Personas
+Persona
 
-All three modes share the same spatial representation, training history, and athlete preferences.
+Who they are
 
-## 1.2 Product Vision
+What they need from EchoPath
 
-Create an accessible running platform that transforms routes and physical movement into information athletes can independently understand and learn from.
+Maya, the independent walker
 
-Our long-term goal is to make spatial information more accessible in endurance sports without requiring expensive proprietary equipment.
+Blind or low-vision commuter who uses a cane and a smartphone daily
 
-The system should eventually support ordinary running routes, organized marathons, and race preparation for multisport events.
+Early warning of head-height obstacles and people approaching, without taking a hand off the cane
 
-## 1.3 Problem Statement
+Dev, the busy pedestrian
 
-Blind and visually impaired runners may depend on sighted guides, familiar paths, verbal directions, or specialized assistance during training and competition.
+Sighted but distracted (hands full, low light, headphones on)
 
-Existing computer-vision research has demonstrated that smartphones can help detect running paths and provide directional feedback.
+Quiet, glanceless alerts for things about to cross his path
 
-However, there is an additional challenge: athletes may still lack an accessible way to study an unfamiliar racecourse, rehearse complex sections, understand their past route decisions, and connect that knowledge to their subsequent training.
+Sam, the O&M trainer
 
-Traditional visual maps, GPS traces, and performance charts are not independently accessible to everyone.
+Orientation and mobility instructor who teaches clients new routes
 
-KineticSpatial aims to bring these experiences together through sound, simulation, and athlete-controlled feedback.
+A free tool she can demo to clients and tune (sensitivity, sound style) to each person
 
-## 1.4 The Product's Main Differentiator
+Maya is the primary persona. Every MVP decision is judged against her.
 
-Our proposed innovation is **Spatial Memory Transfer**, supported by CourseDNA, RaceTwin, RealityMatch, and Race Memory.
+User stories by feature
+Each story lists acceptance criteria (AC). Targets are starting points to tune on real devices. MVP = hackathon build; V2 = after the hackathon.
 
-The athlete learns a route before running, encounters a consistent representation of that route during supported training, and revisits the same route afterward.
+F1. Mobile web app with live camera (MVP)
+US-1.1 As Maya, I want to open EchoPath from a link in my phone browser so that I can start without installing anything.
 
-This connection is the central product contribution.
+AC: Works in current Chrome on Android and Safari on iOS; installable as a PWA; repeat visits load from cache in under 3 seconds.
+US-1.2 As Maya, I want one large Start button and clear spoken guidance for the camera permission prompt so that I can begin without sighted help.
 
-Camera-based path tracking, spatial audio, and obstacle detection are important foundation technologies, but they are not new inventions by themselves.
+AC: Rear camera is the default; every control has an accessible label that VoiceOver and TalkBack read; if permission is denied, a spoken message explains how to retry.
+US-1.3 As Maya, I want the app to stay active while the phone hangs on a lanyard or sits in a chest pocket so that I can walk hands-free.
 
-## 1.5 Product Goals
+AC: Screen Wake Lock is requested on start; the app warns audibly if the camera stream drops or the page is backgrounded (browsers pause camera access in the background).
+US-1.4 As Maya, I want to pause everything instantly so that I can take a call or step into a quiet space.
 
-- Make real racecourses accessible through interactive sound.
-- Allow athletes to practice route decisions before arriving at the venue.
-- Develop a modular spatial guidance architecture capable of incorporating camera and sensor information.
-- Explore obstacle-awareness and path-tracking technology through controlled research demonstrations.
-- Connect previously learned route information with later movement data.
-- Allow athletes to independently replay and compare training sessions.
-- Design the application to be usable through screen readers and audio-first controls.
-- Evaluate whether interactive route rehearsal improves course understanding.
-- Support athlete independence without removing established safety assistance.
+AC: A full-screen double-tap target toggles pause; a distinct sound confirms paused and resumed.
+F2. Real-time obstacle and people detection (MVP)
+US-2.1 As Maya, I want people and common obstacles detected from live video so that I know what is around me.
 
-## 1.6 Non-Goals for the MVP
+AC: Detects at least person, bicycle, car, motorcycle, bus, truck, chair, bench, potted plant, stop sign and similar COCO classes; sustained 15 FPS or more on a mid-range phone.
+US-2.2 As Maya, I want to hear only about things in my walking path so that I am not overwhelmed.
 
-The first release will not:
+AC: The frame is split into left, center and right zones; detections whose box is below a minimum size (far away) or outside the path corridor are ignored; thresholds are adjustable.
+US-2.3 As Maya, I want repeated cues for the same object to be limited so that I can still hear traffic and conversation around me.
 
-- Replace a sighted running guide.
-- Guarantee collision avoidance.
-- Certify any outdoor path as safe.
-- Provide unrestricted autonomous running at sprint speed.
-- Guarantee recognition of every pedestrian or vehicle.
-- Replace a commercial navigation application.
-- Deliver reliable underwater navigation or swimming-turn control.
-- Offer live wheelchair collision avoidance.
-- Depend on VR headsets or custom tactile hardware.
-- Claim safety-critical latency or reliability without validation.
+AC: A lightweight tracker assigns IDs across frames; a given object cues on first entry, then again only if it gets markedly closer or changes zone; maximum of three simultaneous cue sources.
+US-2.4 (stretch) As Maya, I want walls and glass doors flagged even though they are not a detectable class so that I do not walk into them.
 
----
+AC: A "large looming surface" cue triggers when the scene expands quickly across the center zone (optical-flow or monocular-depth fallback).
+F3. Directional audio cues in each ear (MVP)
+Browsers cannot vibrate earphones, so "vibration in each ear" is delivered as a short, buzzy pulsed tone panned hard to one side. (The Vibration API only buzzes the phone, and is unsupported in iOS Safari.)
 
-# 2. COMPETITIVE CONTEXT
+US-3.1 As Maya, I want a cue in my left ear for something on my left, my right ear for the right, and both ears for straight ahead so that I know which side to avoid.
 
-## 2.1 Google's Project Guideline
+AC: Zone-to-pan mapping is left = -1, center = 0, right = +1; verified with a headphone test.
+US-3.2 As Maya, I want a guidance cue toward the clearer side when my path is blocked so that I know which way to step.
 
-Google's original open-source Project Guideline demonstrates:
+AC: When the center zone has a close obstacle, a soft repeating tone plays in the ear of the freer side ("go right" = right ear); stops once the path clears.
+US-3.3 As Maya, I want different sounds for people, vehicles and static obstacles so that I can tell them apart without thinking.
 
-- Camera-based marked-line segmentation.
-- Path geometry reconstruction.
-- Visual-inertial motion tracking.
-- Look-ahead path guidance.
-- Monocular depth-based obstacle mapping.
-- Directional and spatial audio.
-- Tracking-loss warnings.
-- Native Android integration.
-- Simulation tools.
+AC: Sound palette follows the mapping table in the next section; each category is distinguishable in a 5-person listening test.
+US-3.4 As Maya, I want cues to get faster as things get closer so that urgency is obvious.
 
-The source repository and published architecture can be studied and, where licensing permits, incorporated into later development.
+AC: Pulse rate scales with estimated distance (for example 1 Hz beyond 5 m up to 6 Hz inside 1 m).
+US-3.5 As a first-time user, I want a quick headphone check so that I know stereo cues will work.
 
-## 2.2 Google's Running Guide Agent, May 2026
+AC: Setup plays a tone in the left ear, then the right, and asks the user to confirm; if they hear both sides equally, it warns that speakers or mono audio may be in use.
+F4. Fast on-device inference (MVP)
+US-4.1 As Maya, I want everything to work with no signal and no video uploaded so that I stay private and reliable.
 
-Google's newer experimental system extends into:
+AC: After first load, the app works in airplane mode; zero network requests during inference (verifiable in dev tools); model files cached by a service worker.
+US-4.2 As Maya, I want responses to feel instant so that a cue matches what is in front of me now.
 
-- Unmarked-path interpretation.
-- On-device environmental understanding.
-- Offline path perception.
-- Urgent navigation feedback.
-- Scene reasoning using Gemma.
-- Route and workout planning.
-- AI coaching.
-- Break management.
-- Experimental intelligent-eyewear integration.
+AC: Capture-to-sound latency at p95 is 250 ms or less; median inference under 50 ms on a recent phone with WebGPU, with a WASM fallback.
+US-4.3 As Maya, I want the app to keep working when my phone gets hot or slow so that it does not stall mid-walk.
 
-KineticSpatial must not represent these capabilities as gaps that Google has never addressed.
+AC: If FPS falls below 12 for 3 seconds, the app steps down input resolution, then model size, and tells the user once; it steps back up when stable.
+US-4.4 As a developer, I want the detector behind a swappable interface so that I can compare models quickly.
 
-## 2.3 Our Proposed Differentiation
+AC: A single detect(frame) contract returns boxes, classes and scores; at least two models (for example RTMDet-tiny and YOLO nano, both exported to ONNX) can be selected by a flag.
+F5. Spatial audio simulation (MVP)
+US-5.1 As Maya, I want an object's sound to seem to come from its actual direction so that I can point toward it by ear.
 
-| Existing capability | Our proposed development |
-|---|---|
-| Understand the immediate path | Understand and rehearse an entire racecourse |
-| Directional running instructions | Interactive course-learning experiences |
-| Obstacle and navigation alerts | Connect environmental observations with a previously learned route |
-| AI running coach | Athlete-controlled course rehearsal and spatial feedback |
-| Running session assistance | Before, during, and after training continuity |
-| Visual route maps | Audio-native course exploration |
-| GPS history | Independently navigable spatial performance replay |
-| General simulation environment | Simulations of actual event routes and unexpected decisions |
+AC: Each tracked object drives a Web Audio PannerNode (HRTF); azimuth is computed from the box center and the camera's horizontal field of view (assumed about 65 degrees until calibrated).
+US-5.2 As Maya, I want distance to be audible so that I can judge how soon I must react.
 
-This distinction is an opportunity to develop and validate, not proof of worldwide novelty.
+AC: Distance is estimated from box height and a typical real-world height per class (a person is about 1.7 m); gain, pitch and pulse rate all change with distance.
+US-5.3 As Maya, I want a moving object's sound to sweep across my ears so that I can follow someone passing in front of me.
 
----
+AC: Panner position updates every frame with smoothing; no audible clicks or zipper noise.
+US-5.4 As Sam, I want to switch between full spatial (HRTF) and simple stereo pan so that I can match what each client finds clearer.
 
-# 3. TARGET USERS AND PERSONAS
+AC: Settings include mode, master volume, sensitivity and cue-sound style, saved on device.
+F6. Spoken approach warnings (V2)
+US-6.1 As Maya, I want a short spoken warning when something is approaching so that I know what it is and roughly how long I have.
 
-## 3.1 Primary Users
+AC: Example: "Person, left, about three seconds." Spoken only when estimated time-to-contact is under 4 seconds and confidence is high.
+US-6.2 As Maya, I want time-to-contact estimated from how fast an object grows in view so that warnings reflect real approach speed.
 
-**Blind runners**
+AC: Time-to-contact is box height divided by its rate of growth, smoothed over 5 or more frames; stationary objects while I am walking are handled by comparing against my own motion (stretch).
+US-6.3 As Maya, I want speech to take priority over beeps without being cut off so that I can understand it.
 
-Athletes who cannot depend on visual maps or environmental landmarks.
+AC: Beeps duck by about 12 dB during speech; at most one utterance every 2 seconds; the most urgent warning goes first; speech uses on-device text-to-speech (speechSynthesis) with pre-recorded clips as fallback.
+US-6.4 As Maya, I want to choose how chatty the voice is so that I am not nagged.
 
-**Low-vision runners**
+AC: Verbosity options: off, urgent only, all approaching objects.
+Sound design and requirements
+Every category gets its own timbre so the user can tell what it is before any speech is added. Sounds are synthesized in the browser (no audio files needed for the MVP).
 
-Athletes who may benefit from audio guidance, accessible route preparation, and adjustable information density.
+Category
 
-**Beginning adaptive runners**
+Example classes
 
-Individuals learning spatial cues, unfamiliar running routes, and structured running skills.
+Cue sound
 
-**Competitive athletes**
+Direction
 
-Runners preparing for marathons, races, or unfamiliar endurance-event courses.
+Gets more urgent by
 
-## 3.2 Secondary Users
+Person
 
-**Sighted running guides**
+person
 
-Help annotate routes, review training, and maintain established assistance.
+Soft two-note marimba blip
 
-**Adaptive-sports coaches**
+Spatialized to the person's azimuth
 
-Use recorded sessions to support training discussions.
+Faster repeats, higher pitch
 
-**Accessibility researchers**
+Vehicle or cyclist
 
-Evaluate spatial-audio feedback, route recognition, and accessible training experiences.
+car, bus, truck, bicycle, motorcycle
 
-**Event organizers**
+Low pulsing hum with a rising sweep
 
-Potentially provide structured, accessible racecourse information.
+Spatialized
 
-## 3.3 Core User Needs
+Louder, faster pulse, adds a second tone inside 3 m
 
-Athletes should be able to:
+Static obstacle
 
-- Understand a course without looking at a map.
-- Learn the sequence of important turns.
-- Recognize route features through sound.
-- Practice route decisions.
-- Understand when route information is uncertain.
-- Receive appropriate contextual guidance in tested environments.
-- Review sessions without needing to interpret a graph.
-- Control their own training data.
-- Work with a guide without making the guide the only source of spatial information.
+chair, bench, pole, plant, sign
 
----
+Short dry wooden "tock"
 
-# 4. PRIMARY USER JOURNEYS
+Spatialized
 
-## Journey A: Preparing for a Race
+Faster repeats
 
-1. The athlete opens KineticSpatial.
-2. They choose an existing route or upload a GPX file.
-3. The app identifies major course features.
-4. CourseDNA provides an accessible audio overview.
-5. The athlete explores individual route sections.
-6. RaceTwin starts an interactive simulation.
-7. The athlete practices choosing directions.
-8. What-If Training introduces unexpected situations.
-9. The athlete reviews their results.
-10. The course is saved for future training.
+Blocked path
 
-**Desired outcome:** The athlete can independently explore and practice the route's known structure.
+center zone obstructed and close
 
-## Journey B: Supported Running Guidance
+Harsh buzz in both ears
 
-1. The athlete selects a route or supported training mode.
-2. The application checks device capabilities.
-3. The athlete confirms the supervision arrangement.
-4. Camera and sensor processing begins.
-5. The system estimates visible path geometry and movement.
-6. Relevant directional cues are generated.
-7. Candidate obstacles and uncertainty states take priority.
-8. The athlete can pause or stop the session.
-9. Events are recorded when recording is enabled.
+Center
 
-**Desired outcome:** The system demonstrates contextual guidance and uncertainty handling in appropriately controlled conditions.
+Continuous inside 1 m
 
-## Journey C: Understanding a Completed Run
+Go-this-way guide
 
-1. The athlete selects a completed session.
-2. Race Memory loads the planned and recorded routes.
-3. They hear an audio summary.
-4. They navigate between important events.
-5. They replay an unexpected deviation.
-6. They compare it with the intended route.
-7. They optionally hear a simulated alternative decision.
-8. They save the section for another practice attempt.
+freer side of the frame
 
-**Desired outcome:** The athlete can understand meaningful differences without seeing a visual GPS trace.
+Gentle rising tone
 
-## Journey D: Working With a Guide
+Hard-panned to that ear
 
-1. A guide opens a shared course.
-2. They add important route annotations.
-3. The athlete reviews the annotations through accessible controls.
-4. The athlete accepts, edits, or removes notes.
-5. Relevant information becomes available during route rehearsal.
-6. The athlete chooses whether to share selected training results.
+Stops when the path clears
 
-**Desired outcome:** Course knowledge becomes accessible without reducing athlete control.
+System
 
----
+start, pause, low FPS, camera lost
 
-# 5. PRODUCT SCOPE AND RELEASE LEVELS
+Distinct short earcons
 
-Every feature will have one development classification.
+Center
 
-**P0 — Hackathon MVP:** Required for the core end-to-end experience.
+Not applicable
 
-**P1 — Hackathon Stretch:** Valuable if time and technical stability permit.
+Cross-cutting requirements
 
-**P2 — Post-Hackathon Pilot:** Needs additional development, user testing, or hardware integration.
+Priority order when sources compete: blocked path, then vehicles, then people, then static obstacles; at most three sources sound at once.
+All cues are mixed through one limiter so the output never clips or spikes in volume.
+A fixed safe maximum gain protects hearing; the master volume cannot exceed it.
+Cues must leave room for ambient sound: support open-ear and transparency-mode headphones, and recommend them in onboarding.
+Settings (volume, sensitivity, mode, verbosity) persist locally and are reachable by screen reader.
+Technical architecture
+architecture · 8 stages, 1 V2 branch
 
-**R — Research:** Safety-critical or technically uncertain capability requiring a separate validation program.
+architecture · 8 stages, 1 V2 branch
 
-A working P0 product is more important than an incomplete implementation of all features.
+Frames flow from the camera through a worker-hosted detector into a tracker that turns boxes into zones, distances and time-to-contact. The cue engine then drives spatial audio in the MVP and spoken warnings in V2.
 
----
+Model options (verify licences before shipping)
 
-# 6. COMPLETE FUNCTIONAL REQUIREMENTS
+Option
 
-## 6.1 Accessibility and Setup
+Runtime
 
-### FR-01: Accessible Athlete Onboarding
-**Priority: P0**
+Licence
 
-**Requirement:** Users must be able to operate the main application without viewing the screen.
+Notes
 
-**Implementation:**
-- Semantic React components.
-- Keyboard navigation.
-- Screen-reader labels.
-- Accessible forms.
-- Optional spoken instructions.
-- Saved preferences.
+RTMDet-tiny (OpenMMLab)
 
-**Acceptance criteria:** A keyboard and screen-reader user can select a course, begin a simulation, pause, and access replay without visual assistance.
+ONNX Runtime Web
 
-### FR-02: Device and Session Readiness
-**Priority: P0**
+Apache-2.0
 
-**Requirement:** The application must identify available device features and avoid presenting unavailable capabilities as operational.
+Your named pick; export through MMDeploy to ONNX
 
-**Implementation:**
-- Browser capability detection.
-- Camera permission checks.
-- Audio initialization.
-- Optional geolocation and motion permissions.
-- Vibration feature detection.
-- Visible and spoken error states.
+YOLOX-nano or tiny
 
-**Acceptance criteria:** Missing permissions or unsupported features produce understandable messages and appropriate fallbacks.
+ONNX Runtime Web
 
----
+Apache-2.0
 
-## 6.2 Computer Vision and Environmental Sensing
+Very small; simple post-processing
 
-### FR-03: Camera-Based Path Detection
-**Priority: P1**
+MediaPipe Object Detector (EfficientDet-Lite or SSD-MobileNet)
 
-**Requirement:** The system should identify a marked running path from controlled prerecorded camera footage.
+MediaPipe Tasks Vision
 
-**Implementation:**
-- Video frame extraction.
-- Color segmentation or trained segmentation model.
-- Path-mask generation.
-- Centerline estimation.
-- Confidence reporting.
+Apache-2.0
 
-**Acceptance criteria:** The prototype displays the detected path, produces route-direction estimates, and reports tracking failures on a labeled test video.
+Fastest setup in a browser; good day-one baseline
 
-### FR-04: Unmarked-Path Recognition
-**Priority: R**
+Ultralytics YOLO nano
 
-**Requirement:** Future versions should investigate semantic recognition of ordinary running paths without painted guidelines.
+ONNX Runtime Web or TF.js
 
-**Implementation:**
-- Semantic segmentation.
-- Path-versus-road classification.
-- Outdoor-scene understanding.
-- Scene-confidence evaluation.
+AGPL-3.0
 
-**Acceptance criteria:** A future research benchmark demonstrates defined performance across multiple environment types before any supervised field pilot.
+Easy tooling, but AGPL obligations apply if you distribute it
 
-### FR-05: Obstacle Detection
-**Priority: P1 for recorded footage; R for live reliance**
+Recommended path: get an end-to-end loop working on the MediaPipe baseline first, then swap in RTMDet-tiny behind the same detect(frame) interface if time allows.
 
-**Requirement:** The system should identify candidate obstacles and determine whether they may intersect the estimated training corridor.
+Geometry from the box alone. With focal length in pixels f, box height h, box center x in a frame of width w, and a typical real-world height H per class, direction, distance and time-to-contact are:
 
-**Implementation:**
-- Object detection.
-- Candidate segmentation.
-- Relative position estimation.
-- Path-intersection analysis.
-- Alert generation.
+\theta = \arctan\!\left(\frac{x - w/2}{f}\right) \qquad d \approx \frac{f \cdot H}{h} \qquad \tau \approx \frac{h}{dh/dt}
 
-**Acceptance criteria:** The recorded-video demonstration includes annotated positive and negative cases, with measured false alarms and misses.
+Estimates are rough by design: they only need to rank "far, near, very near" and "approaching or not". Calibrate f per device if possible.
 
-### FR-06: Moving Obstacle Tracking
-**Priority: R**
+Latency budget (starting targets, capture to sound)
 
-**Requirement:** Future versions should track nearby moving objects across frames.
+Stage
 
-**Implementation:**
-- Object association.
-- Optical flow.
-- Camera-motion compensation.
-- Relative trajectory estimation.
-- Uncertainty modeling.
+Target
 
-**Acceptance criteria:** Object identity and motion estimates are evaluated against recorded reference trajectories.
+Capture and resize
 
-### FR-07: Spatial Position Tracking
-**Priority: P1 in simulation; R for live accuracy**
+30 ms
 
-**Requirement:** The system must represent estimated heading, movement, progress, and lateral deviation relative to the intended path.
+Inference
 
-**Implementation:**
-- Virtual coordinates for MVP.
-- Camera geometry.
-- Motion sensors.
-- GPS when available.
-- Later visual-inertial fusion.
+80 ms
 
-**Acceptance criteria:** Simulated route-relative measurements match known ground truth; live claims require separate accuracy testing.
+Tracking and cue logic
 
-### FR-08: 3D Environmental Mapping
-**Priority: R**
+10 ms
 
-**Requirement:** Future versions should maintain a local spatial representation of visible paths and candidate hazards.
+Audio scheduling and output (wired headphones)
 
-**Implementation:**
-- Camera calibration.
-- Depth estimation.
-- Ground-plane projection.
-- Local path-map construction.
-- Confidence decay and stale-data removal.
+60 ms
 
-**Acceptance criteria:** An offline benchmark demonstrates spatial-estimation accuracy and proper behavior when observations become unreliable.
+Headroom
 
-### FR-09: Path Centerline and Boundary Estimation
-**Priority: P1**
+70 ms
 
-**Requirement:** Given a detected path region, the system should estimate its centerline, curvature, and visible corridor geometry.
+Total (p95)
 
-**Implementation:**
-- Path-mask processing.
-- Centerline extraction.
-- Curve fitting.
-- Boundary estimation.
+250 ms
 
-**Acceptance criteria:** Centerline estimates can be compared with annotated reference paths and include uncertainty indicators.
+Safety, accessibility and privacy
+A missed detection could mean a fall or collision, so the product must be honest about what it cannot do.
 
----
+Safety
 
-## 6.3 Spatial Audio and Haptic Feedback
+First-run disclaimer, read aloud and confirmed: EchoPath is a supplementary aid, not a replacement for a cane, guide dog or sighted assistance, and it can miss obstacles (glass, stairs, drop-offs, low light).
+Fail loudly: if the camera, model or audio stops, play a clear warning earcon within 1 second rather than going silent.
+Low-light check: if the frame is too dark or blurry for reliable detection, tell the user.
+Never imply certainty: the MVP does not say "path clear"; silence means "nothing detected", not "safe".
+Test with blind and low-vision users and an O&M professional before any real-world release; for the hackathon, demo in a controlled space.
+Accessibility
 
-### FR-10: Binaural Spatial Audio Engine
-**Priority: P0**
+Fully operable with VoiceOver and TalkBack; large touch targets; no information conveyed by visuals alone.
+High-contrast visual debug overlay (bounding boxes, zones) for sighted teammates and judges, off by default.
+Privacy
 
-**Requirement:** The system must generate distinct, interpretable directional audio cues.
+All video processing stays in the browser; frames are never stored or sent anywhere.
+No account, no analytics that include camera or location data.
+Camera indicator remains visible in the browser while active; the app states plainly that nothing is recorded.
+Success metrics and demo plan
+Metric
 
-**Implementation:**
-- Web Audio API.
-- PannerNode.
-- Audio source scheduling.
-- Adjustable intensity.
-- Headphone-based playback.
+Target
 
-**Acceptance criteria:** Left, right, and centered cues can be played, tested, and mapped consistently to route events.
+How to measure
 
-### FR-11: Optional Haptic Feedback
-**Priority: P0 where supported**
+Frame rate
 
-**Requirement:** Supported devices should provide vibration patterns for selected events.
+15 FPS or more sustained for 5 minutes
 
-**Implementation:**
-- Navigator Vibration API.
-- Pattern definitions.
-- Support detection.
-- Audio fallback.
+On-screen FPS counter on 2 test phones
 
-**Acceptance criteria:** Vibration events are generated on supported test devices; unsupported devices continue functioning without vibration.
+Capture-to-sound latency (p95)
 
-### FR-12: Soundprint Calibration
-**Priority: P0**
+250 ms or less
 
-**Requirement:** Users should be able to test directional cue recognition and save their preferred audio settings.
+Timestamp at frame capture vs. audio scheduled
 
-**Implementation:**
-- Short listening exercises.
-- Response recording.
-- Accuracy calculations.
-- Preference storage.
+Person detection recall in the path corridor
 
-**Acceptance criteria:** A completed calibration updates the sound settings used by a later simulation.
+90% or more on a self-recorded test walk
 
----
+Label a 5-minute walk video, compare detections
 
-## 6.4 Movement Prediction and Feedback Management
+False alerts per minute
 
-### FR-13: Predictive Drift Estimation
-**Priority: P1**
+3 or fewer
 
-**Requirement:** In simulation, the engine must estimate possible route deviation over a short future interval.
+Same test walk, count cues with nothing present
 
-**Implementation:**
-- Current position.
-- Estimated velocity.
-- Heading.
-- Known corridor geometry.
-- Kinematic prediction.
+Direction accuracy
 
-**Acceptance criteria:** Predicted deviations are reproducible and measurable against the simulation's actual future positions.
+90% of cues judged on the correct side
 
-### FR-14: Time-to-Edge Estimation
-**Priority: P1**
+Blindfolded teammates identify left, center, right
 
-**Requirement:** The simulation should estimate when a moving virtual athlete may cross a corridor boundary.
+Network requests during inference
 
-**Implementation:** Distance-to-boundary divided by estimated lateral speed where mathematically valid, with explicit handling of uncertain or stationary cases.
+0
 
-**Acceptance criteria:** The estimate is not displayed when required inputs are invalid or unreliable.
+Dev-tools network tab in airplane mode
 
-### FR-15: Cadence and Stride Awareness
-**Priority: P1**
+Setup time for a new user
 
-**Requirement:** The system should support optional rhythm-based coaching experiments.
+Under 60 seconds to first cue
 
-**Implementation:**
-- Sensor data or simulated step events.
-- Peak detection.
-- Cadence calculation.
-- Optional cue timing.
+Timed with a first-time tester
 
-**Acceptance criteria:** Estimated cadence can be compared with known reference data in a controlled test.
+Demo script (3 minutes)
 
-### FR-16: Cue Priority and Safety State Manager
-**Priority: P0**
+Open the link on a phone, tap Start with the screen reader on, pass the headphone check.
+A teammate walks across the room from left to right; the judges hear the sound pan between ears (put one headphone on a judge).
+Place a chair ahead: the blocked-path buzz plays and the guide tone points to the clear side.
+Switch to airplane mode and show it still works.
+If V2 voice is ready: a teammate walks toward the phone and it announces "Person, center, about three seconds".
+Roadmap, risks and open questions
+roadmap · 3 phases, 2 gates
 
-**Requirement:** Important alerts must take priority over nonessential audio.
+roadmap · 3 phases, 2 gates
 
-**Implementation:**
-- Central event queue.
-- Event urgency.
-- Confidence thresholds.
-- Cue interruption.
-- Cooldown periods.
-- Explicit STOP and UNCERTAIN states.
+The MVP exists to win the demo. V2 voice work waits until real users have tested the core cues.
 
-**Acceptance criteria:** Simultaneous events produce the correct priority order, and nonessential coaching cannot override an urgent state.
+Risks and mitigations
 
----
+Risk
 
-## 6.5 CourseDNA and Race Preparation
+Mitigation
 
-### FR-17: GPX Course Import and Route Compiler
-**Priority: P0**
+Bluetooth headphones add audio delay (often 100 ms or more), so cues lag the scene
 
-**Requirement:** Users must be able to upload a valid GPX route and convert it into a structured course.
+Use wired or low-latency earbuds for the demo; measure and report end-to-end latency
 
-**Implementation:**
-- GPX parsing.
-- Coordinate validation.
-- Distance calculation.
-- Bearing calculation.
-- Turn extraction.
-- Segment assignment.
+iOS Safari limits: WebGPU support varies, audio starts only after a tap, camera pauses in the background
 
-**Acceptance criteria:** A sample route produces a valid course with reproducible distance, segments, and major turns.
+WASM fallback, start audio on the Start tap, keep the screen awake, warn if backgrounded
 
-### FR-18: CourseDNA Audio Route Exploration
-**Priority: P0**
+Missed detections (glass, stairs, low light)
 
-**Requirement:** Users must be able to explore known route features without looking at a map.
+Mandatory disclaimer, fail-loud earcons, never say "path clear", test in a controlled space
 
-**Implementation:**
-- Audio motifs for route events.
-- Segment-based playback.
-- Turn spatialization.
-- Checkpoint sounds.
-- Repeat and skip controls.
+Alert fatigue from too many cues
 
-**Acceptance criteria:** A user can access each major route segment through audio-first controls.
+Tracker-based rate limits, path corridor, sensitivity setting, three-source cap
 
-### FR-19: RaceTwin Interactive Simulator
-**Priority: P0**
+Distance estimates wrong for unusual sizes (children, seated people)
 
-**Requirement:** Users must be able to practice a course in a virtual environment using accessible directional controls.
+Use coarse bands (far, near, very near) rather than exact meters
 
-**Implementation:**
-- Virtual athlete.
-- Position and velocity updates.
-- Path matching.
-- Route deviation measurement.
-- Decision tracking.
+Heat and battery drain from continuous inference
 
-**Acceptance criteria:** The athlete can start, complete, and save a simulated route while receiving audio feedback.
+Adaptive resolution and model size, pause control
 
-### FR-20: Spatial Memory Transfer
-**Priority: P0 in simulation; P2 for live integration**
+Model licence obligations (AGPL)
 
-**Requirement:** The same route segment identifiers and meanings must persist through rehearsal, simulation, and replay.
+Prefer Apache-2.0 models; check licences before distributing
 
-**Implementation:**
-- Stable segment IDs.
-- Shared course metadata.
-- Reusable audio motifs.
-- Session-to-segment linking.
+Open questions
 
-**Acceptance criteria:** Selecting one course segment reveals corresponding events across CourseDNA, RaceTwin, and Race Memory.
-
-### FR-21: What-If Training
-**Priority: P0**
-
-**Requirement:** Users must be able to practice alternative course situations.
-
-**Required scenarios:**
-- Missed turn.
-- Changed route.
-- Simulated GPS loss.
-
-**Implementation:**
-- Deterministic scenario configuration.
-- Injected route events.
-- Decision recording.
-- Scenario replay.
-
-**Acceptance criteria:** All three scenarios run consistently and record the user's decisions and outcomes.
-
-### FR-22: GuideBridge Route Annotations
-**Priority: P1**
-
-**Requirement:** A coach or guide should be able to annotate a course and make those notes accessible to the athlete.
-
-**Implementation:**
-- Segment-linked notes.
-- Annotation categories.
-- Audio-readable descriptions.
-- Sharing controls.
-
-**Acceptance criteria:** An annotation appears at its intended course segment and can be reviewed with a screen reader.
-
-### FR-23: Race Strategy and Multisport Course Preparation
-**Priority: P2**
-
-**Requirement:** Future versions should represent organized race features and multisport transitions.
-
-**Implementation:**
-- Checkpoints.
-- Elevation sections.
-- Hydration locations.
-- Event annotations.
-- Swim/bike/run stage metadata.
-
-**Acceptance criteria:** A supported example event can be explored as an ordered, accessible course itinerary.
-
-### FR-24: Progressive Training and Cue Fading
-**Priority: P1**
-
-**Requirement:** Athletes should be able to reduce optional coaching hints during practice.
-
-**Implementation:**
-- Training difficulty options.
-- Cue-density settings.
-- User-controlled assistance.
-
-**Acceptance criteria:** Changing the assistance level affects nonessential hints while preserving required simulation stop and uncertainty cues.
-
----
-
-## 6.6 Live Route Integration and Post-Run Analysis
-
-### FR-25: RealityMatch Route Agreement
-**Priority: P1 for recorded data; R for live navigation**
-
-**Requirement:** The system should compare recorded location and path observations with a planned route.
-
-**Implementation:**
-- GPS trace ingestion.
-- Candidate segment matching.
-- Heading checks.
-- Observation confidence.
-- Conflict detection.
-
-**Acceptance criteria:** Known location disagreements generate uncertainty events instead of fabricated directions.
-
-### FR-26: FutureStep Predictive Guidance
-**Priority: P1**
-
-**Requirement:** The engine should combine future route geometry with movement prediction to generate anticipatory cues in simulation.
-
-**Implementation:**
-- Look-ahead route geometry.
-- Virtual heading.
-- Estimated future position.
-- Cue scheduling.
-
-**Acceptance criteria:** A controlled simulation can compare FutureStep against an ordinary reactive-guidance baseline.
-
-### FR-27: Adaptive Running Coach
-**Priority: P2**
-
-**Requirement:** The system should support optional running progress and coaching information.
-
-**Implementation:**
-- Pace and cadence data.
-- Training goals.
-- Milestone events.
-- Rest reminders.
-- Lower-priority spoken output.
-
-**Acceptance criteria:** Coaching cues can be enabled, disabled, and interrupted by higher-priority guidance states.
-
-### FR-28: Race Memory Spatial Replay
-**Priority: P0**
-
-**Requirement:** Users must be able to review a completed simulation through a navigable audio timeline.
-
-**Implementation:**
-- Session-event recording.
-- Route reconstruction.
-- Planned-versus-actual comparison.
-- Segment navigation.
-- Adjustable playback speed.
-
-**Acceptance criteria:** A saved simulation can be replayed accurately and its deviations accessed without visual navigation.
-
-### FR-29: Counterfactual Comparison, Progress and Coach Review
-**Priority: P0 for comparisons; P2 for collaborative sharing**
-
-**Requirement:** The application should compare a simulated decision with a defined alternative and summarize performance.
-
-**Implementation:**
-- Alternative scenario playback.
-- Correct decision counts.
-- Missed-turn metrics.
-- Route deviation calculations.
-- Accessible results.
-- Future consent-based coach sharing.
-
-**Acceptance criteria:** The same recorded simulation produces consistent metrics and reproducible alternative outcomes.
-
----
-
-# 7. DETAILED MVP REQUIREMENTS
-
-## 7.1 The Main Deliverable
-
-The MVP must demonstrate a complete and understandable sequence:
-
-**Upload a real route → Hear its structure → Practice following it → Encounter an unexpected situation → Replay and understand the result.**
-
-The entire flow must remain usable without viewing a visual route map.
-
-## 7.2 Route Import Requirements
-
-The system must:
-
-- Accept valid GPX files.
-- Detect invalid files.
-- Preserve route-point order.
-- Reject unusable coordinate data.
-- Calculate route distance.
-- Identify significant direction changes.
-- Group nearby changes into meaningful segments.
-- Create stable segment identifiers.
-- Store the processed course locally.
-
-A route file must not be assumed to contain information about temporary construction, pedestrian traffic, surface condition, or every hazard.
-
-## 7.3 CourseDNA Requirements
-
-After route processing, users must be able to:
-
-- Hear the course overview.
-- Start full-course audio playback.
-- Navigate to the next segment.
-- Return to the previous segment.
-- Repeat a section.
-- Hear the direction of a turn.
-- Access known checkpoints.
-- Change playback speed.
-- Pause playback.
-
-The sound mapping must be consistent across sessions.
-
-## 7.4 RaceTwin Requirements
-
-The simulator must:
-
-- Load a processed course.
-- Represent a virtual athlete on the route.
-- Accept accessible steering inputs.
-- Advance virtual movement.
-- Calculate deviation from the intended course.
-- Generate appropriate navigation events.
-- Record decisions and timestamps.
-- Support pause and restart.
-- Save completed attempts.
-
-The visual simulation is a secondary observer interface; sound and accessible controls are the primary user interface.
-
-## 7.5 What-If Requirements
-
-Each scenario must define:
-
-- The starting course segment.
-- What changes.
-- What information the user receives.
-- Which choices are available.
-- How the simulation processes those choices.
-- What events are recorded.
-- How the outcome is explained.
-
-The simulator must clearly distinguish between normal route information and deliberately altered training scenarios.
-
-## 7.6 Race Memory Requirements
-
-A saved session must support:
-
-- Audio session summary.
-- Segment selection.
-- Important event navigation.
-- Playback controls.
-- Planned-versus-actual route comparison.
-- Wrong-turn reconstruction.
-- Alternative simulated decisions.
-- Accessible performance metrics.
-
-The athlete must be able to understand an important deviation without viewing a line graph.
-
----
-
-# 8. SYSTEM ARCHITECTURE
-
-## 8.1 Core Design Principle
-
-All features will use one shared spatial-event architecture.
-
-Input systems produce estimates or events.
-
-A common spatial layer interprets them.
-
-A centralized feedback manager decides what information should be presented.
-
-Session recording captures the relevant data for replay.
-
-## 8.2 High-Level Architecture
-
-**Inputs**
-- GPX routes.
-- Athlete interactions.
-- Camera frames.
-- GPS observations.
-- Motion sensor readings.
-- Guide annotations.
-
-↓
-
-**Core Processing**
-- Route compiler.
-- Camera perception.
-- Spatial tracking.
-- Route matching.
-- Prediction engine.
-- Scenario simulator.
-- Confidence evaluation.
-
-↓
-
-**Spatial Event Engine**
-- Route directions.
-- Turns.
-- Checkpoints.
-- Deviations.
-- Candidate obstacles.
-- Tracking failures.
-- Coaching events.
-
-↓
-
-**Output Manager**
-- Binaural spatial audio.
-- Short speech.
-- Optional vibration.
-- Accessible interface updates.
-
-↓
-
-**Session Recorder**
-- Positions.
-- Decisions.
-- Events.
-- Route segment references.
-- User responses.
-
-↓
-
-**Race Memory**
-- Spatial replay.
-- Comparison.
-- Learning metrics.
-
-## 8.3 Technology Stack
-
-| Component | Recommended technology |
-|---|---|
-| Frontend | React, Next.js, TypeScript |
-| Styling | Tailwind CSS |
-| Spatial simulation | Canvas or SVG |
-| GPX parsing | JavaScript GPX parser |
-| Geospatial geometry | Turf.js |
-| Audio rendering | Web Audio API |
-| Audio spatialization | PannerNode |
-| Speech | Accessible browser speech or recorded prompts |
-| Haptics | Navigator Vibration API |
-| Camera input | getUserMedia |
-| Controlled image analysis | OpenCV.js |
-| Trained perception models | ONNX Runtime Web or appropriate MediaPipe-compatible tools |
-| Device motion | DeviceMotion API |
-| GPS | Geolocation API |
-| Local storage | IndexedDB |
-| Offline resources | Service workers |
-| Analysis | Python, NumPy, OpenCV |
-| Future native implementation | Android, Kotlin/C++, ARCore |
-
-Not every browser will support every capability.
-
-The architecture must allow unsupported modules to be disabled without breaking the route-learning experience.
-
-## 8.4 Recommended Code Modules
-
-**Route Engine**
-- GPX parsing.
-- Distance calculations.
-- Turn extraction.
-- Route segmentation.
-- Course validation.
-
-**Spatial Engine**
-- Route-relative coordinate systems.
-- Geometry.
-- Movement estimates.
-- Spatial events.
-
-**Simulation Engine**
-- Virtual athlete.
-- Controls.
-- Scenario logic.
-- Position updates.
-
-**Perception Engine**
-- Video processing.
-- Path detection.
-- Obstacle candidates.
-- Tracking confidence.
-
-**Prediction Engine**
-- Drift estimation.
-- Time-to-edge.
-- Route look-ahead.
-
-**Feedback Engine**
-- Spatial audio.
-- Sound motifs.
-- Haptics.
-- Priorities.
-
-**Memory Engine**
-- Session recording.
-- Replay.
-- Comparison.
-- Progress metrics.
-
-**Accessibility Engine**
-- Voice-first navigation.
-- Screen-reader controls.
-- Preferences.
-- Fallbacks.
-
----
-
-# 9. DATA REQUIREMENTS
-
-## 9.1 Course Object
-
-Each course must store:
-
-- Course ID.
-- Name.
-- Source.
-- Coordinate sequence.
-- Total distance.
-- Optional elevation data.
-- Route segments.
-- Known checkpoints.
-- Guide annotations.
-- Creation date.
-- Version.
-
-## 9.2 Route Segment Object
-
-Each segment must store:
-
-- Segment ID.
-- Course ID.
-- Start and end positions.
-- Start and end distance.
-- Direction.
-- Curvature.
-- Audio motif.
-- Optional description.
-- Related landmarks.
-
-## 9.3 Athlete Profile
-
-Store only information needed for the product:
-
-- Profile identifier.
-- Audio preferences.
-- Accessibility settings.
-- Saved courses.
-- Calibration results.
-- Training history permissions.
-
-## 9.4 Spatial Observation
-
-For simulated or research data:
-
-- Timestamp.
-- Source type.
-- Position or relative position.
-- Heading.
-- Confidence.
-- Relevant course segment.
-- Optional uncertainty estimate.
-
-## 9.5 Hazard Candidate
-
-For controlled research demonstrations:
-
-- Timestamp.
-- Detection category.
-- Estimated image location.
-- Approximate route relationship.
-- Confidence.
-- Last observed time.
-- Alert status.
-
-## 9.6 Feedback Event
-
-Each feedback event contains:
-
-- Event ID.
-- Event type.
-- Event priority.
-- Relevant direction.
-- Associated segment.
-- Confidence.
-- Source.
-- Timestamp.
-- Duration or expiration.
-- Whether it was actually delivered.
-
-## 9.7 Training Session
-
-Each session contains:
-
-- Session ID.
-- Course ID.
-- Training mode.
-- Start and end times.
-- Position records.
-- Cue records.
-- Decisions.
-- Scenario changes.
-- Checkpoint events.
-- Outcome metrics.
-
-## 9.8 Privacy Requirements
-
-- Store locally by default for the first release.
-- Require consent for camera recording.
-- Do not upload footage automatically.
-- Give users control over session deletion.
-- Avoid collecting unnecessary personal information.
-- Require explicit permission before sharing training history.
-- Do not expose private routes through public links by default.
-
----
-
-# 10. UX AND AUDIO DESIGN REQUIREMENTS
-
-## 10.1 User Interface Principles
-
-The application must be audio-first rather than visual-first.
-
-Visual maps can support sighted observers, developers, and low-vision users, but the core tasks must not require vision.
-
-## 10.2 Required Screens
-
-1. Welcome and Athlete Profile.
-2. Device Readiness.
-3. Course Library.
-4. CourseDNA Explorer.
-5. Soundprint Studio.
-6. RaceTwin Simulator.
-7. What-If Training.
-8. KineticGuide Research Preview.
-9. Race Memory.
-10. Progress and GuideBridge.
-
-## 10.3 Audio Vocabulary
-
-| Event | Initial audio design |
-|---|---|
-| Left route direction | Left-positioned sound |
-| Right route direction | Right-positioned sound |
-| Upcoming turn | Brief directional preview |
-| Checkpoint | Short confirmation motif |
-| Simulated wrong turn | Distinct deviation motif |
-| Candidate hazard | Priority warning |
-| Uncertain tracking | Explicit uncertainty cue |
-| Stop state | Unmistakable stop instruction |
-| Coaching milestone | Optional speech |
-| Replay comparison | Consistent spatial reconstruction |
-
-This is a proposed cue vocabulary, not a validated set of sounds.
-
-It must be reviewed with blind and low-vision athletes.
-
-## 10.4 Cue Priority Rules
-
-Required priority:
-
-1. Stop.
-2. Urgent candidate hazard.
-3. Tracking or route uncertainty.
-4. Navigation.
-5. Checkpoint.
-6. Coaching.
-7. Optional notifications.
-
-Only the highest appropriate cue should dominate when events conflict.
-
-## 10.5 Accessibility Standards
-
-The product should target WCAG 2.2 AA where applicable, including:
-
-- Keyboard access.
-- Screen-reader labeling.
-- Visible focus.
-- Logical reading order.
-- Clear instructions.
-- Text alternatives.
-- Sufficient contrast.
-- Accessible error messages.
-- Appropriately sized touch targets.
-- Options to pause and repeat audio.
-- No dependence on color alone.
-
-The team should test with NVDA, VoiceOver, or another relevant screen reader.
-
----
-
-# 11. NON-FUNCTIONAL REQUIREMENTS
-
-## 11.1 Performance
-
-**PWA:**
-- Route processing should remain responsive on the target demo device.
-- Audio rendering must not block the interface.
-- Simulation updates should remain consistent.
-- Session recording should not noticeably interrupt playback.
-- Expensive geometry calculations should be cached or moved off the main thread when necessary.
-
-**Proposed MVP engineering target:** The time from a generated simulator event to audio scheduling should be measured, with an initial target below 150 milliseconds on the chosen demo device. This is a development target, not a safety or human reaction-time guarantee.
-
-**Computer vision:** Record actual inference latency on each tested device rather than promising 60 fps.
-
-## 11.2 Reliability
-
-- Invalid routes must fail gracefully.
-- Missing GPS must not break CourseDNA.
-- Missing vibration support must not break audio.
-- A denied camera permission must not break RaceTwin.
-- Browser refreshes must not corrupt saved courses.
-- Replaying a saved deterministic simulation must reproduce its important events.
-
-## 11.3 Offline Capability
-
-At minimum, previously cached course rehearsal and virtual training should work without an internet connection.
-
-Live maps, external event information, and cloud-based features may require connectivity.
-
-## 11.4 Security
-
-- Validate uploaded GPX content.
-- Prevent scripts or unsafe content from executing through annotations.
-- Restrict camera access to explicitly authorized sessions.
-- Avoid unnecessary raw video retention.
-- Protect shared training data.
-- Provide session deletion.
-
-## 11.5 Device Compatibility
-
-Primary prototype target: Recent Chrome-based browsers on desktop and Android.
-
-Secondary target: Safari and iOS for route exploration, simulation, audio, and replay.
-
-Browser vibration may not be available on iOS; supported audio feedback must remain functional.
-
-Native integration is a future possibility, not an MVP dependency.
-
----
-
-# 12. SAFETY AND OPERATIONAL REQUIREMENTS
-
-## 12.1 Safety Position
-
-The first version is a training and research prototype.
-
-The live perception components are not validated as a replacement for a guide, cane, trained mobility support, or other appropriate assistance.
-
-Outdoor testing must retain suitable human supervision.
-
-## 12.2 Required Operational States
-
-**INITIALIZING:** Checking permissions and device capabilities.
-
-**READY:** Supported training mode prepared.
-
-**TRACKING:** Observations currently satisfy the tested mode's confidence criteria.
-
-**UNCERTAIN:** Position or environmental interpretation is unreliable.
-
-**HAZARD:** A candidate obstacle or urgent event has been identified.
-
-**STOP:** Guidance is not reliable enough to continue the test safely.
-
-**PAUSED:** The user has stopped or suspended the activity.
-
-## 12.3 Failure Cases to Handle
-
-- No camera permission.
-- Camera disconnected.
-- Heavy motion blur.
-- Missing path marking.
-- Ambiguous intersection.
-- Obstacle partially hidden.
-- Incorrect object detection.
-- GPS jump.
-- Route file mismatch.
-- Motion permission denied.
-- Headphones disconnected.
-- Audio output muted.
-- Browser backgrounded.
-- Low battery or thermal throttling.
-- Unsupported vibration.
-- Stale spatial observations.
-
-For safety-related uncertainty, the system must avoid confidently inventing a direction.
-
-## 12.4 Restricted Claims
-
-The product must not claim:
-
-- Guaranteed safe independent running.
-- Perfect obstacle recognition.
-- Automatic collision avoidance.
-- Instantaneous physical correction.
-- Certified medical or mobility functionality.
-- Worldwide first-of-its-kind status without additional prior-art review.
-
----
-
-# 13. PRODUCT SUCCESS METRICS
-
-## 13.1 Primary Success Metrics
-
-**Route understanding**
-
-Can participants identify major route turns after CourseDNA rehearsal?
-
-**Decision accuracy**
-
-How many correct route decisions are made in RaceTwin?
-
-**Learning between attempts**
-
-Does performance change over repeated simulations?
-
-**Independent accessibility**
-
-Can participants complete the core experience without visual assistance?
-
-## 13.2 Secondary Metrics
-
-- Spatial cue recognition accuracy.
-- Response time to cues.
-- Number of missed turns.
-- Average simulated lateral path error.
-- Recovery time after simulated mistakes.
-- Number of cues delivered.
-- Number of repeated or suppressed alerts.
-- Perceived mental workload.
-- User-reported clarity and confidence.
-- Session completion and technical failure rates.
-
-## 13.3 Computer-Vision Research Metrics
-
-- Path segmentation quality.
-- Centerline estimation error.
-- Candidate obstacle precision and recall.
-- False hazard warnings.
-- Missed candidate obstacles.
-- Processing latency.
-- Tracking-loss frequency.
-- Correct uncertainty responses.
-
-## 13.4 Comparison Experiments
-
-**Experiment 1: Spoken Directions vs. CourseDNA**
-
-Measure route recall and decision accuracy after both preparation methods.
-
-**Experiment 2: Reactive Guidance vs. FutureStep**
-
-Measure simulated route departures, false warnings, and response timing.
-
-**Experiment 3: Fixed Sound Cues vs. Soundprint**
-
-Measure directional-cue recognition and preference.
-
-**Experiment 4: Verbal Summary vs. Race Memory**
-
-Measure how accurately participants identify where and why a simulated route deviation occurred.
-
-The results must be reported as measured, including negative or inconclusive outcomes.
-
----
-
-# 14. RELEASE PLAN
-
-## Release 1: Hackathon MVP
-
-### Must ship
-
-- Accessible application foundation.
-- Athlete profile and preferences.
-- Device and audio checks.
-- GPX route importer.
-- Route geometry and segmentation.
-- CourseDNA route exploration.
-- Binaural sound engine.
-- Cue priority manager.
-- RaceTwin interactive simulation.
-- Missed-turn scenario.
-- Changed-route scenario.
-- GPS-uncertainty scenario.
-- Spatial Memory Transfer between virtual modes.
-- Race Memory.
-- Planned-versus-actual route comparison.
-- Basic Soundprint calibration.
-- Accessible session metrics.
-
-### Success definition
-
-One user can complete an entire virtual course-learning cycle without needing to see the screen.
-
-## Release 1.1: Hackathon Stretch
-
-- Marked-path segmentation on prerecorded footage.
-- Detected centerline visualization.
-- Candidate obstacle detection.
-- Research hazard alerts.
-- Simulated predictive drift.
-- Time-to-edge.
-- GPS trace import.
-- Basic RealityMatch.
-- GuideBridge route notes.
-
-### Success definition
-
-A controlled camera recording can generate measured path and candidate-hazard events, while the application clearly shows failures and uncertainty.
-
-## Release 2: Supervised Research Pilot
-
-- More robust live path perception.
-- Native Android exploration.
-- Sensor fusion.
-- Visual-inertial spatial tracking.
-- Improved route matching.
-- Environmental obstacle research.
-- Outdoor supervised tests.
-- User-informed cue redesign.
-- Adaptive running coaching.
-
-### Success definition
-
-Clearly defined perception and feedback tasks meet pre-established research criteria in supervised testing.
-
-## Release 3: Broader Adaptive Sports
-
-- Triathlon course preparation.
-- Swimming movement sonification.
-- Goalball tactical simulations.
-- Accessible wheelchair-sports replay.
-- Extended coach collaboration.
-
-Each sport requires its own task-specific design and validation.
-
----
-
-# 15. DEVELOPMENT PLAN AND OWNERSHIP
-
-## Workstream A: Course and Geospatial Engine
-
-**Responsibilities:**
-- GPX import.
-- Distance calculations.
-- Route bearings.
-- Turn identification.
-- Segmentation.
-- Route event generation.
-
-**Deliverable:** A structured, reusable course model.
-
-## Workstream B: Audio and Accessibility
-
-**Responsibilities:**
-- Web Audio.
-- PannerNode spatialization.
-- Cue priority management.
-- Soundprint.
-- Screen-reader controls.
-- Haptic fallback.
-
-**Deliverable:** Consistent and accessible directional feedback.
-
-## Workstream C: RaceTwin and What-If Simulation
-
-**Responsibilities:**
-- Virtual runner.
-- Steering controls.
-- Scenario engine.
-- Movement calculations.
-- Event logging.
-
-**Deliverable:** A complete virtual course-practice experience.
-
-## Workstream D: Race Memory and Evaluation
-
-**Responsibilities:**
-- Session data.
-- Spatial replay.
-- Route comparisons.
-- Progress metrics.
-- Testing and demo integration.
-
-**Deliverable:** A meaningful post-session analysis experience.
-
-## Optional Workstream E: Computer Vision
-
-**Responsibilities:**
-- Recorded-video ingestion.
-- Path segmentation.
-- Centerline extraction.
-- Obstacle candidates.
-- Benchmarking.
-- Confidence visualization.
-
-**Deliverable:** A clearly labeled research prototype demonstrating the original running-guidance direction.
-
----
-
-# 16. DEFINITION OF DONE
-
-A feature is complete only when:
-
-1. It works on the selected test device.
-2. It has clear user-facing feedback.
-3. Important failures are handled.
-4. It is accessible through the intended controls.
-5. Its outputs are recorded or reproducible where relevant.
-6. It has at least one documented test.
-7. It does not claim capabilities beyond what was demonstrated.
-8. It is integrated into the main athlete journey.
-
-The following must be verified before the hackathon submission:
-
-- GPX import succeeds for valid routes.
-- Invalid routes produce accessible errors.
-- Route segmentation is reproducible.
-- Audio direction mapping is consistent.
-- RaceTwin records user decisions.
-- All three What-If scenarios work.
-- Saved sessions replay correctly.
-- Route comparisons calculate correctly.
-- Unsupported vibration is handled.
-- The core application works with keyboard navigation.
-- Tracking uncertainty is not presented as a confirmed safe route.
-- Research perception modules are visibly separated from validated functionality.
-
----
-
-# 17. HACKATHON DEMONSTRATION REQUIREMENTS
-
-The final demo should follow one athlete's experience rather than presenting disconnected features.
-
-## Scene 1: Introduce the Problem
-
-Explain that blind runners may need assistance not only with immediate navigation, but also with understanding and preparing for unfamiliar racecourses.
-
-## Scene 2: Upload a Real Course
-
-Import a GPX route.
-
-Show how the route becomes structured segments.
-
-## Scene 3: Hear the Course
-
-Let a judge listen to CourseDNA through headphones.
-
-Demonstrate a turn, checkpoint, and recognizable sequence of bends.
-
-## Scene 4: Practice With RaceTwin
-
-The judge navigates a virtual course using spatial audio.
-
-The audience sees the route and virtual athlete.
-
-## Scene 5: Introduce an Unexpected Event
-
-Trigger a missed-turn or changed-route scenario.
-
-The judge responds without viewing the course.
-
-## Scene 6: Review Race Memory
-
-Replay the simulated attempt.
-
-Show how the athlete can independently recognize their mistake and compare an alternative.
-
-## Scene 7: Demonstrate Camera Perception
-
-If implemented, show recorded running-track footage.
-
-Display the detected guideline, estimated centerline, and candidate obstacle.
-
-Trigger a tracking-loss state to demonstrate honest uncertainty handling.
-
-## Scene 8: Connect Everything
-
-Show how the course segment used in preparation also appears in simulation and Race Memory.
-
-Explain Spatial Memory Transfer.
-
-**Closing message:**
-
-"Most navigation systems focus on telling someone which way to go. KineticSpatial explores how athletes can understand a course before experiencing it, receive meaningful spatial information while training, and learn independently from every attempt."
-
----
-
-# 18. RISKS AND MITIGATION
-
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Computer vision fails outdoors | Unsafe or misleading feedback | Research-only mode, supervised testing, tracking-confidence checks |
-| Spatial audio is confusing | Poor user experience | Co-design, Soundprint, simple cue vocabulary |
-| Too many alerts | Increased cognitive load | Priority manager, cooldowns, limited cues |
-| Browser APIs unsupported | Missing features | Capability detection and fallback modes |
-| GPX geometry is inaccurate | Wrong course interpretation | Route validation and source labeling |
-| GPS is inaccurate | False route deviations | Confidence-aware route matching |
-| User data exposes location history | Privacy risk | Local-first storage and explicit sharing |
-| Feature scope becomes too large | Incomplete hackathon product | Strict P0/P1/R separation |
-| Similarity to Google | Weak differentiation | Emphasize Spatial Memory Transfer and end-to-end course learning |
-| Accessibility not tested | Product fails intended users | Screen-reader testing and direct athlete participation |
-| Simulated success mistaken for real-world safety | Misleading claims | Clearly distinguish simulator, perception prototype, and validated field functionality |
-
----
-
-# 19. DEPENDENCIES AND OPEN QUESTIONS
-
-## Dependencies
-
-- Representative GPX course files.
-- Compatible web browsers.
-- Spatial audio-capable headphones.
-- Accessible interface testing.
-- Recorded path footage for the vision prototype.
-- Appropriate model weights and licenses.
-- Development devices.
-- Input from blind and low-vision athletes and running guides.
-
-## Questions to Resolve Through Testing
-
-**Audio design:** Which sound patterns are easiest for athletes to understand while remaining aware of their surroundings?
-
-**Course representation:** How many route details should be communicated before the audio becomes overwhelming?
-
-**Spatial Memory Transfer:** Does keeping route cues consistent across preparation and replay improve recognition?
-
-**Simulation:** Do athletes find virtual steering decisions useful preparation for real training?
-
-**Perception:** Which environments can the selected phone and model actually interpret reliably?
-
-**Hardware:** Which browser and device combinations provide acceptable performance for each non-safety-critical function?
-
-**Athletic relevance:** Which types of race preparation are most useful to blind and low-vision runners?
-
-These questions should guide development rather than be treated as solved assumptions.
-
----
-
-# 20. FUTURE PRODUCT EXPANSION
-
-## 20.1 Marathon and Running Events
-
-Support:
-- Real course import.
-- Route rehearsal.
-- Spatial training.
-- Guide annotations.
-- Checkpoint information.
-- Post-run replay.
-
-## 20.2 Triathlon and Ironman Preparation
-
-Support:
-- Known swim-course layouts.
-- Cycling route previews.
-- Running route previews.
-- Transition planning.
-- Athlete-guide coordination.
-
-The system must respect competition rules and retain required assistance.
-
-## 20.3 Goalball Training
-
-Build spatial-audio simulations of ball trajectories and defensive choices.
-
-This would be a dedicated training tool, not an in-match acoustic radar.
-
-## 20.4 Swimming and StrokeEcho
-
-Use poolside video analysis to extract visible stroke and approach events.
-
-Convert movement differences into audio for independent technical review.
-
-## 20.5 Wheelchair Sports
-
-Use recorded match data to explore positioning, opponent approaches, and tactical decisions through spatial replay.
-
-Live collision detection is a separate high-risk research project.
-
----
-
-# 21. PRODUCT ROADMAP SUMMARY
-
-| Phase | Focus | Deliverable |
-|---|---|---|
-| Phase 1 | Route foundation | GPX parsing and CourseDNA structure |
-| Phase 2 | Spatial audio | Directional audio and priority engine |
-| Phase 3 | Interactive training | RaceTwin virtual runner |
-| Phase 4 | Scenario learning | What-If Training |
-| Phase 5 | Reflection | Race Memory and comparison |
-| Phase 6 | Accessibility | Soundprint and screen-reader validation |
-| Phase 7 | Computer vision | Marked-path research prototype |
-| Phase 8 | Obstacle awareness | Controlled recorded-video detection |
-| Phase 9 | Course integration | GPS RealityMatch |
-| Phase 10 | Field research | Supervised sensor and navigation testing |
-| Phase 11 | Sports expansion | Triathlon, swimming, and other modules |
-
----
-
-# 22. FINAL PRODUCT DEFINITION
-
-KineticSpatial is a mobile-first accessibility platform that connects real-time spatial guidance with accessible racecourse learning and performance reflection.
-
-Its foundation includes camera-based path recognition, obstacle-awareness research, spatial tracking, predictive movement analysis, binaural audio, and optional haptic feedback.
-
-Its proposed core innovation is the connection between **CourseDNA, RaceTwin, Spatial Memory Transfer, What-If Training, RealityMatch, and Race Memory**.
-
-Athletes can prepare for a route before arriving, practice meaningful decisions in an accessible simulation, receive relevant environmental information during supported training, and independently revisit what happened afterward.
-
-The platform is designed to give blind and visually impaired athletes greater control over their preparation and understanding, while treating safety, privacy, and human assistance as essential design requirements.
-
-**KineticSpatial does not just ask, "How can we guide a runner?"**
-
-**It asks, "How can we make the entire experience of learning, navigating, and understanding a racecourse accessible?"**
-
-*Don't just follow the path. Know the course.*
-
----
-
-## Product Decision
-
-**Primary MVP:** CourseDNA + Spatial Audio + RaceTwin + What-If Training + Race Memory.
-
-**Technical stretch:** Camera-based guideline tracking, obstacle candidate detection, predictive deviation, and RealityMatch using recorded or simulated data.
-
-**Future validated product:** Real-world navigation, 3D mapping, pedestrian tracking, advanced coaching, and adaptive-sports expansion.
-
-The team should prioritize a working, accessible, end-to-end product over a larger set of unfinished or unvalidated capabilities.
+☐ Which phones will you demo on? This decides WebGPU versus WASM as the default.
+☐ Wired or Bluetooth headphones for the demo?
+☐ Can you reach a blind or low-vision tester or an O&M trainer before judging?
+☐ Team size and time left: is V2 voice a stretch goal or cut from the hackathon?
