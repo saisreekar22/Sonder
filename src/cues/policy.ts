@@ -201,22 +201,6 @@ export class CuePolicy {
     const blockerId = this.blockedActive && nearest ? nearest.id : undefined;
 
     if (this.blockedActive) {
-      const d = nearest && nearest.distance < releaseDist ? nearest.distance : loomingCenter ? 1.2 : cfg.blockDistance;
-      sources.push({
-        key: 'blocked',
-        kind: 'blocked',
-        label: nearest?.label,
-        zone: 'center',
-        azimuth: 0,
-        distance: d,
-        band: bandOf(d),
-        rateHz: pulseRateHz(d),
-        continuous: d < CONTINUOUS_M,
-        urgency: closeness(d),
-        secondTone: false,
-        triggered: blockTriggered,
-      });
-
       let side: 'left' | 'right' | null = null;
       // Path-aware guidance: step to the side where the PATH continues with
       // room to pass, not merely the side with fewer objects.
@@ -267,6 +251,27 @@ export class CuePolicy {
       }
       const guideTriggered = side !== null && side !== this.guide;
       this.guide = side;
+
+      const d = nearest && nearest.distance < releaseDist ? nearest.distance : loomingCenter ? 1.2 : cfg.blockDistance;
+
+      // Directional buzz cue: guide the blind runner into the freer side
+      const steerZone: Zone = side ?? 'center';
+      const steerAzimuth = side === 'left' ? -Math.PI / 2 : side === 'right' ? Math.PI / 2 : 0;
+
+      sources.push({
+        key: 'blocked',
+        kind: 'blocked',
+        label: nearest?.label,
+        zone: steerZone,
+        azimuth: steerAzimuth,
+        distance: d,
+        band: bandOf(d),
+        rateHz: pulseRateHz(d),
+        continuous: d < CONTINUOUS_M,
+        urgency: closeness(d),
+        secondTone: false,
+        triggered: blockTriggered,
+      });
       if (side) {
         sources.push({
           key: 'guide',

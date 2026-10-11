@@ -148,7 +148,7 @@ export const DEFAULT_SETTINGS: Settings = {
   volume: 0.8,
   sensitivity: 'medium',
   soundStyle: 'classic',
-  verbosity: 'urgent',
+  verbosity: 'off',
   voiceGuidance: true,
   // Most accurate model by default; drops to Lite0 automatically if the device is slow.
   model: 'efficientdet_lite2',

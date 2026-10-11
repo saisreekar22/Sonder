@@ -11,6 +11,7 @@ import { LgmdDetector, type LgmdOutput } from '../perception/lgmd';
 import { pathDebris, PathEstimator, type PathModel } from '../perception/freespace';
 import { classInfo } from '../perception/classes';
 import { nextGuidance, type GuidanceKey } from '../cues/guidance';
+import { zonePan } from '../perception/zones';
 import { SceneMemory } from '../perception/sceneMemory';
 import { TalkPolicy, type TalkKind } from '../speech/talkPolicy';
 import { groundMap, type GroundMap } from '../perception/ground';
@@ -21,7 +22,7 @@ import type { CameraModel } from '../track/world';
 import { bandOf } from '../perception/geometry';
 import { effectiveFov as effFov } from '../perception/geometry';
 import { Tracker, type Track } from '../perception/tracker';
-import { filterDetections, zonePan } from '../perception/zones';
+import { filterDetections } from '../perception/zones';
 import { QualityGovernor, qualityLadder } from '../perf/governor';
 import { Metrics } from '../perf/metrics';
 import type { Announcer } from '../speech/announcer';
@@ -141,6 +142,7 @@ export class Session {
   private tiltBadSince: number | null = null;
   private lastTiltWarn = -Infinity;
   private walkingAnnounced = false;
+  private lastVibrateAt = 0;
 
   constructor(
     private settings: Settings,
@@ -520,6 +522,17 @@ export class Session {
         distance: Number(src.distance.toFixed(2)),
         latencyMs: latencyMs !== undefined ? Math.round(latencyMs) : undefined,
       });
+    }
+
+    // --- Directional haptics for obstacle guidance ---
+    if (policy.blocked && policy.guideSide) {
+      if (now - this.lastVibrateAt > 500) {
+        this.lastVibrateAt = now;
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          // Double buzz for right, long buzz for left
+          navigator.vibrate(policy.guideSide === 'right' ? [60, 40, 60] : [120]);
+        }
+      }
     }
 
     // --- Spoken warnings (V2) ---------------------------------------------------

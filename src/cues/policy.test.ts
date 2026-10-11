@@ -89,9 +89,26 @@ describe('cue policy', () => {
     expect(out.blocked).toBe(true);
     expect(out.guideSide).toBe('right');
     expect(out.sources[0].kind).toBe('blocked');
+    expect(out.sources[0].zone).toBe('right');
     expect(out.sources[1]).toMatchObject({ kind: 'guide', zone: 'right' });
     // The blocking chair itself is not cued twice.
     expect(out.sources.filter((s) => s.trackId === 1)).toHaveLength(0);
+  });
+
+  it('steers left when the right side has an obstacle', () => {
+    const p = new CuePolicy();
+    const out = p.update(
+      [
+        track(1, { category: 'static', label: 'chair', zone: 'center', distance: 1.4 }),
+        track(2, { category: 'person', zone: 'right', distance: 2 }),
+      ],
+      0,
+      cfg,
+    );
+    expect(out.blocked).toBe(true);
+    expect(out.guideSide).toBe('left');
+    expect(out.sources[0].zone).toBe('left');
+    expect(out.sources[1]).toMatchObject({ kind: 'guide', zone: 'left' });
   });
 
   it('blocked buzz becomes continuous inside 1 m and releases once the path clears', () => {

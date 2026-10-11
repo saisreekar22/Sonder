@@ -561,6 +561,11 @@ export class TrackSession {
       if (ahead || t - this.lastAheadSeen > 1200) this.runnerAhead = ahead ?? null;
       if (ahead && t - this.lastAhead > AHEAD_REPEAT_MS) {
         this.lastAhead = t;
+        const steerPan = ahead.box.x < 0.5 ? 1 : -1;
+        this.audio.lanePing(steerPan, 0.9);
+        if (s.trackHaptics && typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(steerPan > 0 ? [60, 40, 60] : [120]);
+        }
         this.audio.earcon('approach', 0);
         // On roads you can pass: suggest the side with more room (not in track lanes).
         const cx = ahead.box.x + ahead.box.w / 2;
