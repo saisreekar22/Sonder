@@ -29,6 +29,46 @@
           autoplay
           muted
           disablepictureinpicture></video>
+        <canvas id="debug-overlay" hidden aria-hidden="true"></canvas>
+      </div>
+
+      <p id="debug-readout" class="debug-readout" hidden aria-hidden="true"></p>
+
+      <button id="debug-toggle" type="button" aria-label="Toggle sighted debug overlay">
+        Debug
+      </button>
+
+      <div id="debug-settings" hidden aria-hidden="true">
+        <label for="corridor-width">
+          Corridor width
+          <input
+            id="corridor-width"
+            type="range"
+            min="0.2"
+            max="0.6"
+            step="0.01"
+            value="0.33" />
+        </label>
+        <label for="min-size">
+          Min size
+          <input
+            id="min-size"
+            type="range"
+            min="0.02"
+            max="0.2"
+            step="0.005"
+            value="0.08" />
+        </label>
+      </div>
+
+      <div id="disclaimer-overlay" hidden>
+        <div role="dialog" aria-modal="true" aria-labelledby="disclaimer-heading" class="disclaimer-dialog">
+          <h2 id="disclaimer-heading">Before you start</h2>
+          <p id="disclaimer-text"></p>
+          <button id="disclaimer-confirm" type="button" aria-label="Confirm safety notice and continue">
+            Confirm
+          </button>
+        </div>
       </div>
 
       <button id="start-button" type="button" aria-label="Start EchoPath live camera">
