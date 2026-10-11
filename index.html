@@ -28,6 +28,7 @@
     <!-- Voice menu (eyes-free start screen) -->
     <main id="screen-voice" class="screen voice">
       <div class="voice-top">
+        <button type="button" id="btn-voice-back" class="btn-top-back" aria-label="Go back to visual menu">← Back</button>
         <button type="button" id="btn-visual-menu" class="linkish">Visual menu</button>
       </div>
       <h1 tabindex="-1" id="voice-title">EchoPath</h1>
@@ -137,6 +138,9 @@
 
     <!-- First-run safety notice -->
     <main id="screen-disclaimer" class="screen">
+      <div class="screen-header">
+        <button type="button" class="btn-top-back" id="btn-disclaimer-back" aria-label="Go back">← Back</button>
+      </div>
       <h1 tabindex="-1">Before you start</h1>
       <div id="disclaimer-text" class="card prose">
         <p>EchoPath is a supplementary aid. It is not a replacement for a cane, a guide dog or sighted assistance.</p>
@@ -146,10 +150,14 @@
       </div>
       <button id="btn-accept" class="big primary" type="button">I understand, continue</button>
       <button id="btn-reread" type="button">Read it aloud again</button>
+      <button id="btn-disclaimer-return" class="secondary" type="button">Go back</button>
     </main>
 
     <!-- Sound check -->
     <main id="screen-sound" class="screen">
+      <div class="screen-header">
+        <button type="button" class="btn-top-back" id="btn-sound-back-top" aria-label="Go back">← Back</button>
+      </div>
       <h1 tabindex="-1">Sound check</h1>
       <section class="card" aria-labelledby="out-title">
         <h2 id="out-title">Headphones</h2>
@@ -199,6 +207,9 @@
 
     <!-- Guided headphone check -->
     <main id="screen-headphones" class="screen">
+      <div class="screen-header">
+        <button type="button" class="btn-top-back" id="btn-hp-back" aria-label="Go back">← Back</button>
+      </div>
       <h1 tabindex="-1">Headphone check</h1>
       <p id="hp-instructions" class="lead">Put on your headphones. You will hear a tone in one ear, then in the other.</p>
       <div id="hp-question" hidden>
@@ -212,10 +223,14 @@
       </div>
       <button id="hp-begin" class="big primary" type="button">Play the first tone</button>
       <button id="hp-skip" type="button">Skip for now</button>
+      <button id="hp-return" class="secondary" type="button">Go back</button>
     </main>
 
     <!-- Starting / errors -->
     <main id="screen-status" class="screen">
+      <div class="screen-header">
+        <button type="button" class="btn-top-back" id="btn-status-back-top" aria-label="Go back">← Back</button>
+      </div>
       <h1 tabindex="-1" id="status-title">Starting</h1>
       <div class="spinner" id="status-spinner" aria-hidden="true"></div>
       <p id="status-text" class="lead"></p>
@@ -225,13 +240,16 @@
 
     <!-- Running -->
     <main id="screen-running" class="screen running">
-      <ul class="chips" aria-label="Status">
-        <li class="chip" id="chip-state"><span class="dot"></span><span class="txt">Running</span></li>
-        <li class="chip" id="chip-audio"><span class="dot"></span><span class="txt">Sound</span></li>
-        <li class="chip" id="chip-motion"><span class="dot"></span><span class="txt">Standing</span></li>
-        <li class="chip" id="chip-perf"><span class="dot"></span><span class="txt">Starting</span></li>
-        <li class="chip" id="chip-battery" hidden><span class="dot"></span><span class="txt"></span></li>
-      </ul>
+      <div class="screen-top-bar">
+        <button type="button" id="btn-running-back" class="btn-top-back" aria-label="Go back to home">← Back</button>
+        <ul class="chips" aria-label="Status">
+          <li class="chip" id="chip-state"><span class="dot"></span><span class="txt">Running</span></li>
+          <li class="chip" id="chip-audio"><span class="dot"></span><span class="txt">Sound</span></li>
+          <li class="chip" id="chip-motion"><span class="dot"></span><span class="txt">Standing</span></li>
+          <li class="chip" id="chip-perf"><span class="dot"></span><span class="txt">Starting</span></li>
+          <li class="chip" id="chip-battery" hidden><span class="dot"></span><span class="txt"></span></li>
+        </ul>
+      </div>
       <section class="sim" id="wsim-panel" hidden aria-label="Walk simulator">
         <div class="sim-view" id="wsim-view" aria-hidden="true">
           <canvas id="wsim-overlay"></canvas>
@@ -275,12 +293,15 @@
 
     <!-- Track run -->
     <main id="screen-track" class="screen running track">
-      <ul class="chips" aria-label="Status">
-        <li class="chip" id="tchip-state"><span class="dot"></span><span class="txt">Running</span></li>
-        <li class="chip" id="tchip-lane"><span class="dot"></span><span class="txt">Finding lane</span></li>
-        <li class="chip" id="tchip-gps"><span class="dot"></span><span class="txt">GPS</span></li>
-        <li class="chip" id="tchip-perf"><span class="dot"></span><span class="txt">Starting</span></li>
-      </ul>
+      <div class="screen-top-bar">
+        <button type="button" id="btn-track-back" class="btn-top-back" aria-label="Go back to home">← Back</button>
+        <ul class="chips" aria-label="Status">
+          <li class="chip" id="tchip-state"><span class="dot"></span><span class="txt">Running</span></li>
+          <li class="chip" id="tchip-lane"><span class="dot"></span><span class="txt">Finding lane</span></li>
+          <li class="chip" id="tchip-gps"><span class="dot"></span><span class="txt">GPS</span></li>
+          <li class="chip" id="tchip-perf"><span class="dot"></span><span class="txt">Starting</span></li>
+        </ul>
+      </div>
       <section class="sim" id="sim-panel" hidden aria-label="Simulator">
         <div class="sim-view" id="sim-view" aria-hidden="true">
           <canvas id="sim-overlay"></canvas>
@@ -335,7 +356,10 @@
     <!-- Settings -->
     <dialog id="settings" aria-labelledby="settings-title">
       <form method="dialog" id="settings-form">
-        <h2 id="settings-title" tabindex="-1">Settings</h2>
+        <div class="dialog-header">
+          <button type="button" id="btn-settings-back" class="btn-top-back" aria-label="Close settings and go back">← Back</button>
+          <h2 id="settings-title" tabindex="-1">Settings</h2>
+        </div>
 
         <fieldset>
           <legend>Wearing</legend>

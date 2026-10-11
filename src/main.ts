@@ -93,9 +93,32 @@ function speakWelcome(): void {
 // ---------------------------------------------------------------------------
 type ScreenId = 'voice' | 'welcome' | 'disclaimer' | 'sound' | 'headphones' | 'status' | 'running' | 'track';
 let current: ScreenId = 'welcome';
+const screenHistory: ScreenId[] = [];
 
-function show(id: ScreenId): void {
+function getScreenName(id: ScreenId): string {
+  switch (id) {
+    case 'welcome': return 'home';
+    case 'voice': return 'voice menu';
+    case 'disclaimer': return 'safety notice';
+    case 'sound': return 'sound check';
+    case 'headphones': return 'headphone check';
+    case 'status': return 'status';
+    case 'running': return 'walk view';
+    case 'track': return 'track view';
+    default: return 'previous screen';
+  }
+}
+
+function show(id: ScreenId, pushHistory = true): void {
+  if (pushHistory && current !== id && id !== 'welcome') {
+    screenHistory.push(current);
+  }
   current = id;
+  try {
+    if (window.history.state?.screen !== id) {
+      window.history.pushState({ screen: id }, '', `#${id}`);
+    }
+  } catch {}
   updateKeepAlive();
   document.querySelectorAll<HTMLElement>('.screen').forEach((s) => s.removeAttribute('data-active'));
   const el = $(`screen-${id}`);
@@ -124,7 +147,13 @@ function show(id: ScreenId): void {
   }
   if (id === 'sound') {
     setTimeout(() => narrate(
-      'Sound check screen. Use the buttons to test left and right ear sounds. Press Done when finished.',
+      'Sound check screen. Use the buttons to test left and right ear sounds. Press Done or Back when finished, or double-tap to go back.',
+      { interrupt: true }
+    ), 400);
+  }
+  if (id === 'headphones') {
+    setTimeout(() => narrate(
+      'Headphone check screen. Follow the prompts, or press Back to return, or double-tap to go back.',
       { interrupt: true }
     ), 400);
   }
@@ -135,6 +164,83 @@ function show(id: ScreenId): void {
       if (t || tx) narrate(`${t}. ${tx}`, { interrupt: true });
     }, 300);
   }
+}
+
+function goBack(): void {
+  // 1. If settings modal dialog is open, close it
+  const settingsEl = $('settings') as HTMLDialogElement;
+  if (settingsEl.open) {
+    settingsEl.close();
+    announcer.say('Closed settings.', { interrupt: true });
+    return;
+  }
+
+  // 2. If running walk mode, stop cleanly and return home
+  if (session.state !== 'idle') {
+    $('btn-stop').click();
+    return;
+  }
+
+  // 3. If running track mode, stop cleanly and return home
+  if (track.state !== 'idle') {
+    stopTrack();
+    return;
+  }
+
+  // 4. If in headphone check, cancel pending check
+  if (current === 'headphones') {
+    if (hpResolve) {
+      hpResolve(false);
+      hpResolve = null;
+    }
+  }
+
+  // 5. If in voice menu, exit to visual menu
+  if (current === 'voice') {
+    exitVoiceToVisual();
+    return;
+  }
+
+  // 6. Pop from history, skipping any transient status screens or current
+  let prev = screenHistory.pop();
+  while (prev && (prev === current || prev === 'status')) {
+    prev = screenHistory.pop();
+  }
+
+  if (!prev || prev === current) {
+    returnHome();
+    return;
+  }
+
+  show(prev, false);
+  announcer.say(`Returned to ${getScreenName(prev)}.`, { interrupt: true });
+}
+
+function attachSubscreenGestures(screenId: ScreenId): void {
+  const el = $(`screen-${screenId}`);
+  let lastTap = 0;
+  let tapTimer: number | undefined;
+
+  el.addEventListener('pointerup', (e) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('button, a, input, select, textarea, summary, label, details')) return;
+
+    const now = performance.now();
+    if (now - lastTap < 400) {
+      clearTimeout(tapTimer);
+      lastTap = 0;
+      navigator.vibrate?.(30);
+      goBack();
+    } else {
+      lastTap = now;
+      clearTimeout(tapTimer);
+      tapTimer = window.setTimeout(() => {
+        if (performance.now() - lastTap > 380 && current === screenId) {
+          narrate('Double-tap anywhere to go back, or press the Back button.');
+        }
+      }, 420);
+    }
+  });
 }
 
 function status(title: string, text: string, opts: { retry?: boolean; busy?: boolean } = {}): void {
@@ -307,6 +413,8 @@ function readDisclaimer(): void {
 }
 
 $('btn-reread').addEventListener('click', readDisclaimer);
+$('btn-disclaimer-back').addEventListener('click', () => goBack());
+$('btn-disclaimer-return').addEventListener('click', () => goBack());
 $('btn-accept').addEventListener('click', async () => {
   announcer.cancel();
   update({ disclaimerAccepted: true });
@@ -422,7 +530,8 @@ function cameraHelp(e: CameraError): string {
 }
 
 $('btn-retry').addEventListener('click', () => void (settings.activity === 'track' ? startTrack() : startRunning()));
-$('btn-status-back').addEventListener('click', () => show('welcome'));
+$('btn-status-back-top').addEventListener('click', () => goBack());
+$('btn-status-back').addEventListener('click', () => goBack());
 
 // ---------------------------------------------------------------------------
 // Sound check: where sound is going, stereo or mono, direction test, palette
@@ -489,7 +598,8 @@ $('btn-sound').addEventListener('click', async () => {
   await audio.unlock().catch(() => {});
   show('sound');
 });
-$('btn-sound-back').addEventListener('click', () => show(session.state === 'idle' ? 'welcome' : 'running'));
+$('btn-sound-back-top').addEventListener('click', () => goBack());
+$('btn-sound-back').addEventListener('click', () => goBack());
 
 $('btn-select-bt')?.addEventListener('click', async () => {
   await audio.unlock().catch(() => {});
@@ -592,6 +702,8 @@ $('hp-skip').addEventListener('click', () => {
   hpResolve?.(true);
   hpResolve = null;
 });
+$('btn-hp-back').addEventListener('click', () => goBack());
+$('hp-return').addEventListener('click', () => goBack());
 
 function finishHeadphoneCheck(): void {
   const { left, right } = hpAnswers;
@@ -749,6 +861,7 @@ $('btn-stop').addEventListener('click', () => {
   announcer.say('EchoPath stopped.');
   returnHome();
 });
+$('btn-running-back').addEventListener('click', () => goBack());
 
 // Live views take the camera's real shape (portrait phone or landscape webcam/photo).
 for (const v of [video, tvideo])
@@ -1208,6 +1321,7 @@ attachGestures($('track-target'), () => toggleTrackPause(), () => sayStats(), ()
 $('btn-tpause').addEventListener('click', () => toggleTrackPause());
 $('btn-tstats').addEventListener('click', () => sayStats());
 $('btn-tstop').addEventListener('click', () => stopTrack());
+$('btn-track-back').addEventListener('click', () => goBack());
 $('btn-tsettings').addEventListener('click', () => openSettings());
 
 let lastTrackUi = 0;
@@ -1437,6 +1551,7 @@ function openSettings(): void {
 }
 $('btn-settings-welcome').addEventListener('click', openSettings);
 $('btn-settings-run').addEventListener('click', openSettings);
+$('btn-settings-back').addEventListener('click', () => goBack());
 
 function fillForm(): void {
   form.querySelectorAll<HTMLInputElement>('input[name=mode]').forEach((r) => (r.checked = r.value === settings.mode));
@@ -1950,13 +2065,16 @@ function renderVoice(step: MenuStep, hi: number, heard: string): void {
   });
 })();
 
-$('btn-visual-menu').addEventListener('click', () => {
+function exitVoiceToVisual(): void {
   voiceMenu.active = false;
   listener.stop();
   announcer.cancel();
   update({ voiceMenu: false });
-  show('welcome');
-});
+  show('welcome', false);
+}
+$('btn-visual-menu').addEventListener('click', exitVoiceToVisual);
+$('btn-voice-back').addEventListener('click', exitVoiceToVisual);
+
 $('btn-voice-menu').addEventListener('click', async () => {
   update({ voiceMenu: true });
   show('voice');
@@ -1973,8 +2091,8 @@ $('btn-voice-menu').addEventListener('click', async () => {
 let micWarned = false;
 let commandBusy = false;
 
-const WALK_CMDS: Intent[] = ['describe', 'scan', 'pause', 'resume', 'stop', 'louder', 'quieter', 'calmer', 'detailed', 'help'];
-const RUN_CMDS: Intent[] = ['stats', 'describe', 'pause', 'resume', 'stop', 'louder', 'quieter', 'help'];
+const WALK_CMDS: Intent[] = ['describe', 'scan', 'pause', 'resume', 'stop', 'back', 'louder', 'quieter', 'calmer', 'detailed', 'help'];
+const RUN_CMDS: Intent[] = ['stats', 'describe', 'pause', 'resume', 'stop', 'back', 'louder', 'quieter', 'help'];
 const CMD_WORDS: Partial<Record<Intent, string>> = {
   describe: "what's around me",
   scan: 'scan',
@@ -1982,6 +2100,7 @@ const CMD_WORDS: Partial<Record<Intent, string>> = {
   pause: 'pause',
   resume: 'resume',
   stop: 'stop',
+  back: 'go back',
   louder: 'louder',
   quieter: 'quieter',
   calmer: 'calmer',
@@ -2045,6 +2164,8 @@ function runCommand(intent: Intent, running: boolean, list: string): void {
       return;
     case 'stop':
       return running ? stopTrack() : $('btn-stop').click();
+    case 'back':
+      return goBack();
     case 'louder':
       return vol(0.15);
     case 'quieter':
@@ -2063,22 +2184,62 @@ function runCommand(intent: Intent, running: boolean, list: string): void {
 $('btn-voice-cmd').addEventListener('click', () => void voiceCommand());
 $('btn-tvoice-cmd').addEventListener('click', () => void voiceCommand());
 document.addEventListener('keydown', (e) => {
-  if ((e.key === 'v' || e.key === 'V') && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement))
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+  if (e.key === 'v' || e.key === 'V') {
     void voiceCommand();
+  } else if (e.key === 'Escape' || e.key === 'Backspace') {
+    const settingsEl = $('settings') as HTMLDialogElement;
+    if (settingsEl.open || current !== 'welcome') {
+      e.preventDefault();
+      goBack();
+    }
+  }
 });
 
+window.addEventListener('popstate', (e) => {
+  const target = (e.state as { screen?: ScreenId } | null)?.screen;
+  if (target && target !== current) {
+    if (target === 'welcome') returnHome();
+    else show(target, false);
+  } else if (!target && current !== 'welcome') {
+    goBack();
+  }
+});
+
+// Full-screen gestures for sub-screens: double-tap goes back, single tap speaks guidance
+attachSubscreenGestures('disclaimer');
+attachSubscreenGestures('sound');
+attachSubscreenGestures('headphones');
+attachSubscreenGestures('status');
+
 function returnHome(): void {
+  screenHistory.length = 0;
   if (settings.voiceMenu) {
-    show('voice');
+    show('voice', false);
     setTimeout(() => voiceMenu.begin(), 2500);
-  } else show('welcome');
+  } else show('welcome', false);
 }
 
 // Initial state (after every const above is initialised).
 applySettings(settings);
-if (settings.voiceMenu) show('voice');
+if (settings.voiceMenu) show('voice', false);
 void audio.setOutput(settings.audioOutputId); // remembered headphones; applied when audio starts
 void refreshChecks();
 
 // Dev/test hook (used by automated checks; harmless in production).
-(window as unknown as { echopath: unknown }).echopath = { get sim() { return sim; }, get wsim() { return wsim; }, voiceMenu, session, track, audio, detector, motion, runTracker, get settings() { return settings; } };
+(window as unknown as { echopath: unknown }).echopath = {
+  get sim() { return sim; },
+  get wsim() { return wsim; },
+  voiceMenu,
+  session,
+  track,
+  audio,
+  detector,
+  motion,
+  runTracker,
+  get settings() { return settings; },
+  goBack,
+  show,
+  get screenHistory() { return screenHistory; },
+  get current() { return current; },
+};
