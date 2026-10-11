@@ -1,19 +1,19 @@
 {
-  "measuredAt": "2026-10-11T02:59:27.834Z",
-  "appBytes": 18421,
-  "modelBytes": 0,
-  "totalBytes": 18421,
-  "totalKB": 18,
+  "measuredAt": "2026-10-11T04:46:45.043Z",
+  "appBytes": 82039,
+  "modelBytes": 13836895,
+  "totalBytes": 13918934,
+  "totalKB": 13592.7,
   "budgetKB": 10240,
-  "note": "Issue 01: app shell only — model artifact not yet bundled (Issue 03). Budget target ~10 MB (PRD US-1.1).",
+  "note": "Issue 03: app + EfficientDet-Lite0 baseline bundled. Model (~13.8 MB float32) exceeds the ~10 MB target alone; Issue 08 lite→nano ladder is the planned remedy. tasks-vision bundle/wasm load from pinned CDN at runtime.",
   "appEntries": [
     {
       "file": "index.html",
-      "bytes": 1641
+      "bytes": 2893
     },
     {
       "file": "styles.css",
-      "bytes": 1550
+      "bytes": 3596
     },
     {
       "file": "manifest.webmanifest",
@@ -21,11 +21,11 @@
     },
     {
       "file": "sw.js",
-      "bytes": 1638
+      "bytes": 1882
     },
     {
       "file": "src/main.js",
-      "bytes": 4301
+      "bytes": 15271
     },
     {
       "file": "src/camera.js",
@@ -44,6 +44,50 @@
       "bytes": 848
     },
     {
+      "file": "src/detector.js",
+      "bytes": 4345
+    },
+    {
+      "file": "src/detector-worker.js",
+      "bytes": 7252
+    },
+    {
+      "file": "src/mediapipe-tasks.js",
+      "bytes": 4600
+    },
+    {
+      "file": "src/pipeline.js",
+      "bytes": 3991
+    },
+    {
+      "file": "src/debug-overlay.js",
+      "bytes": 4225
+    },
+    {
+      "file": "src/zones.js",
+      "bytes": 4193
+    },
+    {
+      "file": "src/tracker.js",
+      "bytes": 9482
+    },
+    {
+      "file": "src/distance.js",
+      "bytes": 4218
+    },
+    {
+      "file": "src/disclaimer.js",
+      "bytes": 1677
+    },
+    {
+      "file": "src/failloud.js",
+      "bytes": 3382
+    },
+    {
+      "file": "src/wakelock.js",
+      "bytes": 1741
+    },
+    {
       "file": "icons/icon-192.png",
       "bytes": 656
     },
@@ -52,5 +96,10 @@
       "bytes": 2340
     }
   ],
-  "modelEntries": []
+  "modelEntries": [
+    {
+      "file": "models/efficientdet-lite0.tflite",
+      "bytes": 13836895
+    }
+  ]
 }

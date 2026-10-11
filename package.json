@@ -15,5 +15,8 @@
     "jsdom": "^25.0.1",
     "typescript": "^5.6.3",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.1.0"
   }
 }

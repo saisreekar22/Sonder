@@ -1,10 +1,11 @@
 // @ts-check
 // Service worker — offline app shell for Issue 01.
 // Precache-first for the shell; network-first fallback for navigations.
-// The detection model artifact (Issue 03 / Issue 08) will join APP_SHELL
-// once its URL is locked, so repeat visits already work offline here.
+// The EfficientDet-Lite0 artifact + its loader join APP_SHELL so repeat
+// visits run inference offline (Issue 03 baseline, Issue 08 airplane mode).
+// The tasks-vision bundle/wasm stay on a pinned CDN at runtime.
 
-export const CACHE_NAME = 'echopath-v1';
+export const CACHE_NAME = 'echopath-v2';
 
 export const APP_SHELL = [
   './',
@@ -16,6 +17,12 @@ export const APP_SHELL = [
   './src/pause.js',
   './src/earcons.js',
   './src/speech.js',
+  './src/detector.js',
+  './src/detector-worker.js',
+  './src/mediapipe-tasks.js',
+  './src/pipeline.js',
+  './src/debug-overlay.js',
+  './models/efficientdet-lite0.tflite',
   './icons/icon-192.png',
   './icons/icon-512.png',
 ];
