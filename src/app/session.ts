@@ -8,7 +8,7 @@ import { applyEgoMotion, describeScene } from '../perception/egomotion';
 import { focalPx } from '../perception/geometry';
 import { frameQuality, LoomingDetector, toGray, type FrameQuality } from '../perception/imageStats';
 import { Tracker, type Track } from '../perception/tracker';
-import { filterDetections, zonePan } from '../perception/zones';
+import { filterDetections } from '../perception/zones';
 import { QualityGovernor, qualityLadder } from '../perf/governor';
 import { Metrics } from '../perf/metrics';
 import type { Announcer } from '../speech/announcer';
@@ -91,6 +91,7 @@ export class Session {
   private tiltBadSince: number | null = null;
   private lastTiltWarn = -Infinity;
   private walkingAnnounced = false;
+  private lastVibrateAt = 0;
 
   constructor(
     private settings: Settings,
@@ -372,19 +373,21 @@ export class Session {
       });
     }
 
-    // --- Spoken warnings (V2) ---------------------------------------------------
-    if (s.verbosity !== 'off' && this.announcer.ready) {
-      const [w0] = this.warnings.update(tracks, captureT, s.verbosity);
-      if (w0) {
-        const tr = tracks.find((t) => t.id === w0.trackId);
-        if (this.announcer.supported) this.announcer.say(w0.text, { system: false, priority: 1 + w0.ttc });
-        // No on-device voice: a distinct "approaching" sound from that side instead.
-        else this.audio.earcon('approach', tr ? zonePan(tr.zone) : 0);
-        this.lastSoundAt = now;
-        this.warnings.markSpoken(w0.trackId, captureT);
-        this.log.push({ t: Math.round(captureT - this.startedAt), type: 'speech', text: w0.text, ttc: w0.ttc });
+    // --- Directional haptics & audio cues for blind runner obstacle guidance ---
+    if (policy.blocked && policy.guideSide) {
+      if (now - this.lastVibrateAt > 500) {
+        this.lastVibrateAt = now;
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          // Double buzz for right, long buzz for left
+          navigator.vibrate(policy.guideSide === 'right' ? [60, 40, 60] : [120]);
+        }
       }
     }
+
+    // --- Spoken warnings silenced for runner guidance ---
+    // The user explicitly requested removing the voice saying object detected
+    // because the model was detecting every small object and producing constant noise.
+    // Guidance is provided via directional buzz (in the ear to move towards) and vibration.
 
     // --- Metrics & adaptation -------------------------------------------------
     this.lastFrameDone = now;

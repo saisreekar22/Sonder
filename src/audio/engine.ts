@@ -4,7 +4,6 @@ import { zonePan } from '../perception/zones';
 import {
   createBuzz,
   earcon,
-  guidePulse,
   makeNoise,
   personPulse,
   staticPulse,
@@ -66,6 +65,8 @@ export class AudioEngine {
   private timer: number | undefined;
   private volume = 0.8;
   private sinkId = '';
+  private mediaStreamDest: MediaStreamAudioDestinationNode | null = null;
+  private mediaEl: HTMLAudioElement | null = null;
 
   /** Must be called from a user gesture (iOS starts audio only after a tap). */
   async unlock(): Promise<void> {
@@ -81,14 +82,46 @@ export class AudioEngine {
       limiter.ratio.value = 20;
       limiter.attack.value = 0.002;
       limiter.release.value = 0.12;
+      const canCtxSink = typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
       limiter.connect(ctx.destination);
+
+      // If AudioContext does not support setSinkId, use HTMLMediaElement bridge fallback
+      if (!canCtxSink) {
+        try {
+          if ('createMediaStreamDestination' in ctx) {
+            this.mediaStreamDest = ctx.createMediaStreamDestination();
+            limiter.connect(this.mediaStreamDest);
+            if (!this.mediaEl) {
+              const el = document.createElement('audio');
+              el.autoplay = true;
+              el.setAttribute('playsinline', 'true');
+              el.muted = false;
+              el.style.display = 'none';
+              document.body.appendChild(el);
+              this.mediaEl = el;
+            }
+            this.mediaEl.srcObject = this.mediaStreamDest.stream;
+            this.mediaEl.play().catch(() => {});
+          }
+        } catch (err) {
+          console.warn('Bluetooth audio bridge setup error:', err);
+        }
+      }
+
       this.master = ctx.createGain();
       this.master.connect(limiter);
       this.cueBus = ctx.createGain();
       this.cueBus.connect(this.master);
       this.noise = makeNoise(ctx);
       this.setVolume(this.volume);
-      if (this.sinkId) await this.setOutput(this.sinkId).catch(() => {});
+
+      // If a sink was previously saved, route to it; otherwise auto-detect Bluetooth earphones
+      if (this.sinkId) {
+        await this.setOutput(this.sinkId).catch(() => {});
+      } else {
+        await this.autoSelectBluetooth().catch(() => {});
+      }
+
       // A silent buffer fully unlocks output on older iOS.
       const b = ctx.createBufferSource();
       b.buffer = ctx.createBuffer(1, 1, 22050);
@@ -96,6 +129,7 @@ export class AudioEngine {
       b.start();
     }
     if (this.ctx.state !== 'running') await this.ctx.resume();
+    if (this.mediaEl && this.mediaEl.paused) this.mediaEl.play().catch(() => {});
     if (this.timer === undefined) this.timer = window.setInterval(() => this.schedule(), TICK_MS);
   }
 
@@ -127,6 +161,12 @@ export class AudioEngine {
     for (const [key, v] of this.voices) this.release(key, v);
     this.voices.clear();
     this.ctx = null;
+    if (this.mediaEl) {
+      this.mediaEl.pause();
+      this.mediaEl.srcObject = null;
+      this.mediaEl.remove();
+      this.mediaEl = null;
+    }
     if (old) await old.close().catch(() => {});
     await this.unlock();
   }
@@ -139,7 +179,11 @@ export class AudioEngine {
 
   /** Whether the browser can route audio to a chosen device (Chrome/Edge 110+). */
   static get canChooseOutput(): boolean {
-    return typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
+    return (
+      (typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype) ||
+      (typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype) ||
+      (typeof navigator !== 'undefined' && 'mediaDevices' in navigator && 'selectAudioOutput' in (navigator.mediaDevices as unknown as Record<string, unknown>))
+    );
   }
 
   /**
@@ -149,7 +193,123 @@ export class AudioEngine {
   async setOutput(deviceId: string): Promise<void> {
     this.sinkId = deviceId;
     const ctx = this.ctx as (AudioContext & { setSinkId?: (id: string) => Promise<void> }) | null;
-    if (ctx?.setSinkId) await ctx.setSinkId(deviceId);
+    if (ctx?.setSinkId) await ctx.setSinkId(deviceId).catch(console.warn);
+    if (this.mediaEl && 'setSinkId' in this.mediaEl) {
+      await (this.mediaEl as unknown as { setSinkId(id: string): Promise<void> }).setSinkId(deviceId).catch(console.warn);
+    }
+  }
+
+  /**
+   * Scan for connected Bluetooth earphones or headphones and route audio to them.
+   * Returns null if no explicitly labeled Bluetooth device is detected.
+   * Never forces output to an internal speaker.
+   */
+  async autoSelectBluetooth(): Promise<{ deviceId: string; label: string } | null> {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return null;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+      const outs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'default' && d.deviceId !== 'communications');
+      if (outs.length === 0) return null;
+
+      const btRegex = /bluetooth|earphone|headphone|airpod|bud|headset|wireless|shokz|beats|bose|sony|jbl|wh-|wf-|galaxy/i;
+      const bt = outs.find((d) => d.label && btRegex.test(d.label));
+      if (bt) {
+        await this.setOutput(bt.deviceId);
+        return { deviceId: bt.deviceId, label: bt.label };
+      }
+    } catch (e) {
+      console.warn('Auto-select Bluetooth output error:', e);
+    }
+    return null;
+  }
+
+  /**
+   * Allow explicit user selection of Bluetooth or external headphones.
+   * Uses navigator.mediaDevices.selectAudioOutput() if available, else checks labeled devices.
+   */
+  async selectBluetoothOutput(): Promise<{ deviceId: string; label: string } | null> {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && 'selectAudioOutput' in navigator.mediaDevices) {
+      try {
+        const picker = navigator.mediaDevices as unknown as { selectAudioOutput(): Promise<MediaDeviceInfo> };
+        const dev = await picker.selectAudioOutput();
+        if (dev && dev.deviceId) {
+          await this.setOutput(dev.deviceId);
+          return { deviceId: dev.deviceId, label: dev.label || 'Selected Headphones' };
+        }
+      } catch (e) {
+        console.warn('selectAudioOutput cancelled or error:', e);
+        return null;
+      }
+    }
+    return this.autoSelectBluetooth();
+  }
+
+  /**
+   * Enumerate available audio outputs with Bluetooth detection metadata.
+   */
+  async getAudioOutputs(): Promise<Array<{ deviceId: string; label: string; isBluetooth: boolean; isDefault: boolean }>> {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return [];
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+      const outs = devices.filter((d) => d.kind === 'audiooutput');
+      const btRegex = /bluetooth|earphone|headphone|airpod|bud|headset|wireless|shokz|beats|bose|sony|jbl|wh-|wf-|galaxy/i;
+      return outs.map((d, i) => {
+        const isDefault = d.deviceId === 'default' || d.deviceId === '';
+        const isBt = btRegex.test(d.label);
+        const cleanLabel = d.label ? d.label.replace(/^Default - /, '') : (isDefault ? 'System default' : `Output ${i + 1}`);
+        return {
+          deviceId: d.deviceId,
+          label: cleanLabel,
+          isBluetooth: isBt,
+          isDefault,
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Play a pleasant stereo chime to verify sound output is routed to headphones.
+   */
+  async testSound(): Promise<void> {
+    await this.unlock();
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + 0.05;
+
+    // Left chime
+    const o1 = ctx.createOscillator();
+    const g1 = ctx.createGain();
+    const pan1 = ctx.createStereoPanner();
+    o1.type = 'sine';
+    o1.frequency.setValueAtTime(587.33, t);
+    o1.frequency.exponentialRampToValueAtTime(880, t + 0.15);
+    g1.gain.setValueAtTime(0, t);
+    g1.gain.linearRampToValueAtTime(0.5, t + 0.03);
+    g1.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+    pan1.pan.setValueAtTime(-0.6, t);
+    o1.connect(g1).connect(pan1).connect(this.master);
+    o1.start(t);
+    o1.stop(t + 0.38);
+
+    // Right chime
+    const t2 = t + 0.18;
+    const o2 = ctx.createOscillator();
+    const g2 = ctx.createGain();
+    const pan2 = ctx.createStereoPanner();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(880, t2);
+    o2.frequency.exponentialRampToValueAtTime(1174.66, t2 + 0.18);
+    g2.gain.setValueAtTime(0, t2);
+    g2.gain.linearRampToValueAtTime(0.6, t2 + 0.03);
+    g2.gain.exponentialRampToValueAtTime(0.001, t2 + 0.45);
+    pan2.pan.setValueAtTime(0.6, t2);
+    o2.connect(g2).connect(pan2).connect(this.master);
+    o2.start(t2);
+    o2.stop(t2 + 0.48);
+
+    return new Promise((resolve) => setTimeout(resolve, 700));
   }
 
   setVolume(v: number): void {
@@ -254,9 +414,8 @@ export class AudioEngine {
       if (kind === 'person') personPulse(ctx, pan, t, p);
       else if (kind === 'vehicle') vehiclePulse(ctx, pan, t, p);
       else if (kind === 'static') staticPulse(ctx, pan, t, p, this.noise);
-      else if (kind === 'guide') guidePulse(ctx, pan, t);
     }
-    if (kind === 'blocked') {
+    if (kind === 'blocked' || kind === 'guide') {
       const buzz = createBuzz(ctx, pan);
       for (let i = 0; i < 6; i++) {
         const t = t0 + i * 0.22;
@@ -397,7 +556,7 @@ export class AudioEngine {
     } else {
       out.connect(panner).connect(this.cueBus);
     }
-    if (s.kind === 'blocked') v.buzz = createBuzz(ctx, out);
+    if (s.kind === 'blocked' || s.kind === 'guide') v.buzz = createBuzz(ctx, out);
     this.position(v, true);
     return v;
   }
@@ -409,7 +568,13 @@ export class AudioEngine {
     const set = (param: AudioParam, value: number) =>
       immediate ? param.setValueAtTime(value, t) : param.setTargetAtTime(value, t, SMOOTH_S);
     if (v.panner instanceof StereoPannerNode) {
-      const pan = s.kind === 'guide' ? (s.zone === 'left' ? -1 : 1) : s.kind === 'blocked' ? 0 : zonePan(s.zone);
+      let pan = zonePan(s.zone);
+      if (s.kind === 'guide') {
+        pan = s.zone === 'left' ? -1 : s.zone === 'right' ? 1 : 0;
+      } else if (s.kind === 'blocked') {
+        // Directional steer buzz: if zone is left/right, hard-pan to that ear only so the opposite ear is silent!
+        pan = s.zone === 'left' ? -1 : s.zone === 'right' ? 1 : 0;
+      }
       set(v.panner.pan, pan);
       return;
     }
@@ -472,7 +637,6 @@ export class AudioEngine {
       case 'static':
         return staticPulse(ctx, v.out, t, p, this.noise);
       case 'guide':
-        return guidePulse(ctx, v.out, t);
       case 'blocked': {
         const g = v.buzz!.gate.gain;
         const on = Math.min(0.14, period * 0.5);

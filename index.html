@@ -2,6 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
@@ -16,6 +18,12 @@
     <!-- Screen-reader announcements -->
     <div id="sr-polite" class="sr-only" role="status" aria-live="polite"></div>
     <div id="sr-assertive" class="sr-only" role="alert" aria-live="assertive"></div>
+
+    <!-- TTS visual toast (shows what is being spoken) -->
+    <div id="tts-toast" aria-hidden="true"><span class="tts-icon" aria-hidden="true">🔊</span><span id="tts-toast-text"></span></div>
+
+    <!-- Full-screen double-tap zone on welcome screen -->
+    <div id="welcome-tap-zone" aria-hidden="true"></div>
 
     <!-- Home -->
     <main id="screen-welcome" class="screen home" data-active>
@@ -78,7 +86,13 @@
         </ul>
       </section>
 
-      <button id="btn-start" class="big primary" type="button">Start</button>
+      <button id="btn-start" class="big primary" type="button">Start walking</button>
+
+      <div class="tap-hint" aria-hidden="true">
+        <div class="tap-hint-ring">👆</div>
+        <p>Or <strong>double-tap anywhere</strong> on the screen to start</p>
+      </div>
+
       <div class="row2">
         <button id="btn-sound" type="button">Sound check</button>
         <button id="btn-settings-welcome" type="button">Settings</button>
@@ -111,6 +125,7 @@
           <li data-check="out-delay"><span class="dot"></span><span class="what">Sound delay</span><span class="val" id="out-delay">Unknown</span></li>
         </ul>
         <div id="out-problem" class="problem" hidden></div>
+        <button id="btn-select-bt" type="button" class="primary" style="margin-bottom: 8px; width: 100%;">Connect / Select Bluetooth Earphones</button>
         <button id="btn-reconnect" type="button">Headphones just connected? Reconnect sound</button>
       </section>
 
@@ -299,11 +314,13 @@
             <label><span>Step length (m), used without GPS</span><input type="number" name="runStepLength" min="0.4" max="2.2" step="0.05" /></label>
             <label><span>Heart-rate alert above (0 = off)</span><input type="number" name="maxHeartRate" min="0" max="230" step="1" /></label>
           </div>
+          <button type="button" id="btn-settings-hr" class="secondary" style="margin-top: 4px;">Connect Bluetooth Heart-Rate Monitor</button>
+          <p id="settings-hr-status" class="hint" style="margin: -6px 0 0 0;">Heart-rate monitor: not connected</p>
           <label class="row"><input type="checkbox" name="trackObstacles" /> Warn about runners directly ahead</label>
         </fieldset>
 
         <fieldset>
-          <legend>Camera and headphones</legend>
+          <legend>Camera</legend>
           <label>Camera
             <select name="cameraId" id="camera-select">
               <option value="">Automatic (rear camera on phones)</option>
@@ -316,16 +333,49 @@
               <option value="toward">Points toward me (laptop webcam)</option>
             </select>
           </label>
-          <label>Sound output
+        </fieldset>
+
+        <fieldset id="fs-bluetooth">
+          <legend>Bluetooth and sound output</legend>
+          <div class="bt-card" id="bt-status-card">
+            <div class="bt-card-header">
+              <div class="bt-card-icon" id="bt-status-icon" aria-hidden="true">🎧</div>
+              <div class="bt-card-main">
+                <div class="bt-card-title-row">
+                  <span class="bt-card-title" id="bt-active-title">System default output</span>
+                  <span class="bt-chip bt-chip-idle" id="bt-status-badge">Default</span>
+                </div>
+                <div class="bt-card-desc" id="bt-active-desc">Audio follows your system's Bluetooth or default sound output</div>
+              </div>
+            </div>
+            <div class="bt-card-meta">
+              <span id="bt-meta-channels">Stereo</span>
+              <span class="bt-sep">•</span>
+              <span id="bt-meta-delay">Latency: normal</span>
+            </div>
+            <div id="bt-settings-msg" class="bt-msg" hidden></div>
+            <div class="bt-card-actions">
+              <button type="button" id="btn-settings-connect-bt" class="primary">
+                Detect &amp; Connect Bluetooth Earphones
+              </button>
+              <button type="button" id="btn-settings-refresh-bt" class="secondary">
+                Scan / Refresh Devices
+              </button>
+            </div>
+          </div>
+
+          <label>Sound output device
             <select name="audioOutputId" id="output-select">
-              <option value="">System default</option>
+              <option value="">System default (Follows Bluetooth in OS)</option>
             </select>
           </label>
           <p class="hint" id="output-hint">
-            Pair your Bluetooth headphones in your phone or computer's Bluetooth settings first. Bluetooth adds some
-            delay to cues; wired or low-latency earbuds react fastest.
+            Pair your Bluetooth headphones in your computer or phone settings first. If sound is coming through the speaker instead, tap <strong>Detect &amp; Connect Bluetooth Earphones</strong> above to pick your headphones directly.
           </p>
-          <button type="button" id="btn-spatial-test" class="secondary">Test spatial sound (left, ahead, right)</button>
+          <div class="row2">
+            <button type="button" id="btn-settings-test-audio" class="secondary">Test Bluetooth sound</button>
+            <button type="button" id="btn-spatial-test" class="secondary">Test 3D direction</button>
+          </div>
         </fieldset>
 
         <fieldset>

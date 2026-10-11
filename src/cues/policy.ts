@@ -127,13 +127,21 @@ export class CuePolicy {
     const blockerId = this.blockedActive && nearest ? nearest.id : undefined;
 
     if (this.blockedActive) {
+      const side = this.freerSide(live, blockerId);
+      const guideTriggered = side !== null && side !== this.guide;
+      this.guide = side;
       const d = nearest && nearest.distance < releaseDist ? nearest.distance : loomingCenter ? 1.2 : cfg.blockDistance;
+
+      // Directional buzz cue: guide the blind runner into the freer side
+      const steerZone: Zone = side ?? 'center';
+      const steerAzimuth = side === 'left' ? -Math.PI / 2 : side === 'right' ? Math.PI / 2 : 0;
+
       sources.push({
         key: 'blocked',
         kind: 'blocked',
         label: nearest?.label,
-        zone: 'center',
-        azimuth: 0,
+        zone: steerZone,
+        azimuth: steerAzimuth,
         distance: d,
         band: bandOf(d),
         rateHz: pulseRateHz(d),
@@ -143,9 +151,6 @@ export class CuePolicy {
         triggered: blockTriggered,
       });
 
-      const side = this.freerSide(live, blockerId);
-      const guideTriggered = side !== null && side !== this.guide;
-      this.guide = side;
       if (side) {
         sources.push({
           key: 'guide',

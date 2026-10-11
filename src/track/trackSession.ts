@@ -263,8 +263,11 @@ export class TrackSession {
       this.runnerAhead = ahead ?? null;
       if (ahead && t - this.lastAhead > AHEAD_REPEAT_MS) {
         this.lastAhead = t;
-        this.audio.earcon('approach', 0);
-        this.announcer.say(`Runner ahead, ${Math.max(1, Math.round(ahead.distance))} metres.`, { system: false, priority: 0 });
+        const steerPan = ahead.box.x < 0.5 ? 1 : -1;
+        this.audio.lanePing(steerPan, 0.9);
+        if (s.trackHaptics && typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(steerPan > 0 ? [60, 40, 60] : [120]);
+        }
       }
     } catch {
       /* detector busy/reloading: lane guidance carries on regardless */

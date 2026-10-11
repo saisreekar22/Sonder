@@ -39,6 +39,41 @@ let testVideo: File | null = null;
 let modelLoading: Promise<void> | null = null;
 let lastReport: FrameReport | null = null;
 
+// ---------------------------------------------------------------------------
+// TTS narration helper — shows a visual toast and speaks via announcer
+// ---------------------------------------------------------------------------
+const ttsToast = $('tts-toast');
+const ttsToastText = $('tts-toast-text');
+let ttsToastTimer: number | undefined;
+
+/**
+ * Show what is being spoken in a visual overlay (helps sighted helpers see
+ * what the app is saying to a blind user).
+ */
+function showTtsToast(text: string): void {
+  ttsToastText.textContent = text;
+  ttsToast.classList.add('visible');
+  clearTimeout(ttsToastTimer);
+  // Keep toast visible a bit longer than the spoken words (~90 ms per char + 2 s buffer)
+  ttsToastTimer = window.setTimeout(() => ttsToast.classList.remove('visible'), 2000 + text.length * 70);
+}
+
+/** Speak text and show it in the toast simultaneously. */
+function narrate(text: string, opts: { interrupt?: boolean; system?: boolean } = {}): void {
+  showTtsToast(text);
+  announcer.say(text, { interrupt: opts.interrupt ?? false, system: opts.system ?? true });
+}
+
+/** Welcome screen narration — explains the app and what to do. */
+function speakWelcome(): void {
+  const activity = settings.activity === 'track' ? 'track run' : 'walk';
+  narrate(
+    `Welcome to EchoPath. This app turns your camera into ears — people and obstacles become sounds from their direction. ` +
+    `You have selected ${activity} mode. ` +
+    `Double-tap anywhere on the screen to start, or press the Start Walking button.`,
+    { interrupt: true }
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Screens
@@ -53,13 +88,39 @@ function show(id: ScreenId): void {
   el.setAttribute('data-active', '');
   // Move focus to the heading so screen readers announce the new screen.
   el.querySelector<HTMLElement>('h1')?.focus();
+  // Show / hide the welcome double-tap zone
+  const tapZone = $('welcome-tap-zone');
+  tapZone.style.display = id === 'welcome' ? '' : 'none';
   if (id === 'running') {
     $('pause-target').focus();
     requestAnimationFrame(radarLoop);
   }
   if (id === 'track') $('track-target').focus();
   if (id === 'sound') void refreshSound();
-  if (id === 'welcome') void refreshChecks();
+  if (id === 'welcome') {
+    void refreshChecks();
+    // Auto-narrate the welcome screen after a short delay so the page settles
+    setTimeout(() => speakWelcome(), 800);
+  }
+  if (id === 'disclaimer') {
+    setTimeout(() => narrate(
+      'Safety notice. ' + ($('disclaimer-text').innerText.replace(/\n+/g, ' ')),
+      { interrupt: true }
+    ), 400);
+  }
+  if (id === 'sound') {
+    setTimeout(() => narrate(
+      'Sound check screen. Use the buttons to test left and right ear sounds. Press Done when finished.',
+      { interrupt: true }
+    ), 400);
+  }
+  if (id === 'status') {
+    setTimeout(() => {
+      const t = $('status-title').textContent ?? '';
+      const tx = $('status-text').textContent ?? '';
+      if (t || tx) narrate(`${t}. ${tx}`, { interrupt: true });
+    }, 300);
+  }
 }
 
 function status(title: string, text: string, opts: { retry?: boolean; busy?: boolean } = {}): void {
@@ -199,11 +260,15 @@ async function refreshChecks(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Start flow: Start -> (first run: safety notice -> headphone check) -> camera -> running
 // ---------------------------------------------------------------------------
-$('btn-start').addEventListener('click', async () => {
-  // Audio, speech and motion sensors can only start inside a tap on iOS.
-  // The motion permission request must come first, before any await.
+
+/** Shared start handler: invoked by btn-start or the full-screen double-tap zone. */
+async function handleStartTap(): Promise<void> {
   if (settings.activity === 'track' || settings.mount !== 'table') void motion.start().then(() => refreshChecks());
   await audio.unlock().catch(() => {});
+  const bt = await audio.autoSelectBluetooth().catch(() => null);
+  if (bt && !settings.audioOutputId) {
+    update({ audioOutputId: bt.deviceId });
+  }
   announcer.unlock();
   void preloadModel().catch(() => {});
   if (!settings.disclaimerAccepted) {
@@ -212,7 +277,31 @@ $('btn-start').addEventListener('click', async () => {
     return;
   }
   await continueStart();
-});
+}
+
+$('btn-start').addEventListener('click', () => void handleStartTap());
+
+// ------- Double-tap anywhere on the welcome screen to start --------
+{
+  let lastTap = 0;
+  $('welcome-tap-zone').addEventListener('pointerup', () => {
+    const now = performance.now();
+    if (now - lastTap < 400) {
+      lastTap = 0;
+      navigator.vibrate?.(30);
+      void handleStartTap();
+    } else {
+      lastTap = now;
+    }
+  });
+  // First single tap: speak a hint in case the user doesn't know what to do
+  $('welcome-tap-zone').addEventListener('click', () => {
+    const now = performance.now();
+    if (now - lastTap > 500) {
+      narrate('Tap again quickly to start, or press the Start Walking button.');
+    }
+  });
+}
 
 function readDisclaimer(): void {
   announcer.say($('disclaimer-text').innerText.replace(/\n+/g, ' '), { interrupt: true });
@@ -289,7 +378,7 @@ async function startRunning(): Promise<void> {
   updateMirror();
   startMediaSession();
   audio.earcon('start');
-  announcer.say(`EchoPath is running. ${gestureText(false)}`);
+  narrate(`EchoPath is running. ${gestureText(false)}`, { interrupt: true });
 }
 
 /** Flip left/right when the camera looks at the listener (see shouldMirror). */
@@ -387,12 +476,31 @@ $('btn-sound').addEventListener('click', async () => {
 });
 $('btn-sound-back').addEventListener('click', () => show(session.state === 'idle' ? 'welcome' : 'running'));
 
+$('btn-select-bt')?.addEventListener('click', async () => {
+  await audio.unlock().catch(() => {});
+  const res = await audio.selectBluetoothOutput();
+  if (res) {
+    update({ audioOutputId: res.deviceId });
+    await refreshSound();
+    audio.earcon('ok');
+    announcer.say(`Connected to ${res.label}. Audio is routing to your earphones.`);
+  } else {
+    await refreshSound();
+    announcer.say('No Bluetooth earphones selected. Please ensure they are paired in your device settings.');
+  }
+});
+
 $('btn-reconnect').addEventListener('click', async () => {
   await audio.rebuild();
-  if (settings.audioOutputId) await audio.setOutput(settings.audioOutputId).catch(() => {});
+  const bt = await audio.autoSelectBluetooth().catch(() => null);
+  if (bt) {
+    update({ audioOutputId: bt.deviceId });
+  } else if (settings.audioOutputId) {
+    await audio.setOutput(settings.audioOutputId).catch(() => {});
+  }
   await refreshSound();
   audio.earcon('ok');
-  announcer.say('Sound reconnected. Try the direction test.');
+  announcer.say(`Sound reconnected. Output: ${await outputLabel()}. Try the direction test.`);
 });
 
 document.querySelector('#screen-sound .row3')!.addEventListener('click', async (e) => {
@@ -872,11 +980,18 @@ navigator.mediaDevices?.addEventListener?.('devicechange', () => {
   // Let the OS finish switching its default output first.
   deviceTimer = window.setTimeout(async () => {
     if (audio.ctx) {
-      if (settings.audioOutputId) await audio.setOutput(settings.audioOutputId).catch(() => audio.setOutput(''));
-      else await audio.rebuild().catch(() => {}); // follow the new default (e.g. headphones just connected)
+      const bt = await audio.autoSelectBluetooth().catch(() => null);
+      if (bt) {
+        update({ audioOutputId: bt.deviceId });
+      } else if (settings.audioOutputId) {
+        await audio.setOutput(settings.audioOutputId).catch(() => audio.setOutput(''));
+      } else {
+        await audio.rebuild().catch(() => {});
+      }
     }
     if (dialog.open) void refreshDevices();
     if (current === 'sound') void refreshSound();
+    void refreshChecks();
     if (session.state === 'idle' && track.state === 'idle') return;
     audio.earcon('attention');
     const mono = audio.outputChannels === 1;
@@ -1082,20 +1197,98 @@ $('btn-spatial-test').addEventListener('click', async (e) => {
   btn.textContent = 'Test spatial sound (left, ahead, right)';
 });
 
-/** Fill the camera and sound-output pickers (labels need camera permission first). */
+function showBtSettingsMsg(msg: string, type: 'ok' | 'bad' | 'idle' = 'idle'): void {
+  const el = $('bt-settings-msg');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = msg;
+  el.dataset.type = type;
+}
+
+/** Fill the camera and sound-output pickers and update the Bluetooth card. */
 async function refreshDevices(): Promise<void> {
   const camSel = $<HTMLSelectElement>('camera-select');
   const outSel = $<HTMLSelectElement>('output-select');
   const cams = await listCameras().catch(() => []);
   fillSelect(camSel, 'Automatic (rear camera on phones)', cams, settings.cameraId, 'Camera');
-  const devices = (await navigator.mediaDevices?.enumerateDevices().catch(() => [])) ?? [];
-  const outs = devices.filter((d) => d.kind === 'audiooutput' && d.deviceId !== 'default' && d.deviceId !== 'communications');
+
+  const outs = await audio.getAudioOutputs().catch(() => []);
+  const validOuts = outs.filter((d) => !d.isDefault && d.deviceId !== 'communications');
+
   if (AudioEngine.canChooseOutput) {
     outSel.disabled = false;
-    fillSelect(outSel, 'System default', outs, settings.audioOutputId, 'Output');
+    outSel.replaceChildren(new Option('System default (Follows Bluetooth in OS)', ''));
+    validOuts.forEach((d, i) => {
+      const icon = d.isBluetooth ? '🎧 [Bluetooth] ' : '🔊 ';
+      const opt = new Option(`${icon}${d.label || `Output ${i + 1}`}`, d.deviceId);
+      outSel.add(opt);
+    });
+    outSel.value = validOuts.some((d) => d.deviceId === settings.audioOutputId) ? settings.audioOutputId : '';
   } else {
     outSel.disabled = true;
-    fillSelect(outSel, 'Follows your device (choose headphones in Bluetooth settings)', [], '', 'Output');
+    outSel.replaceChildren(new Option('Follows your device (choose headphones in Bluetooth settings)', ''));
+  }
+
+  // Update Bluetooth status card in Settings
+  const label = await outputLabel();
+  const handsFree = /hands-?free|headset|communication/i.test(label);
+  const isBt = /bluetooth|earphone|headphone|airpod|bud|headset|wireless|shokz|beats|bose|sony|jbl|wh-|wf-|galaxy/i.test(label);
+  const ch = audio.outputChannels;
+  const delay = audio.outputLatencyMs;
+
+  const titleEl = $('bt-active-title');
+  if (titleEl) titleEl.textContent = label;
+
+  const descEl = $('bt-active-desc');
+  if (descEl) {
+    if (handsFree) {
+      descEl.textContent = 'Headset hands-free mode (mono). Left and right cannot be heard. Choose "Stereo" in Windows sound settings.';
+    } else if (isBt) {
+      descEl.textContent = 'Connected to Bluetooth earphones (stereo 3D spatial cues active).';
+    } else if (!settings.audioOutputId) {
+      descEl.textContent = 'Audio follows your OS default output. When you connect Bluetooth headphones, sound routes automatically.';
+    } else {
+      descEl.textContent = 'Directly routed to the selected output.';
+    }
+  }
+
+  const badgeEl = $('bt-status-badge');
+  if (badgeEl) {
+    badgeEl.className = 'bt-chip';
+    if (handsFree) {
+      badgeEl.classList.add('bt-chip-warn');
+      badgeEl.textContent = 'Mono (Hands-Free)';
+    } else if (isBt || settings.audioOutputId) {
+      badgeEl.classList.add('bt-chip-ok');
+      badgeEl.textContent = 'Connected';
+    } else {
+      badgeEl.classList.add('bt-chip-idle');
+      badgeEl.textContent = 'Default';
+    }
+  }
+
+  const iconEl = $('bt-status-icon');
+  if (iconEl) {
+    iconEl.textContent = isBt || settings.audioOutputId ? '🎧' : '🌐';
+  }
+
+  const chanEl = $('bt-meta-channels');
+  if (chanEl) {
+    chanEl.textContent = ch >= 2 ? `Stereo (${ch} channels)` : 'Mono: no 3D direction';
+    chanEl.style.color = ch < 2 ? 'var(--bad)' : 'var(--fg)';
+  }
+
+  const delayEl = $('bt-meta-delay');
+  if (delayEl) {
+    delayEl.textContent = delay > 0 ? `Latency: ~${Math.round(delay)} ms${delay > 120 ? ' (Bluetooth delay)' : ''}` : 'Latency: not reported';
+  }
+
+  // Update HR status in Settings
+  const hrEl = $('settings-hr-status');
+  if (hrEl) {
+    hrEl.textContent = hr.connected
+      ? `Connected to ${hr.name} (${hr.current ? `${hr.current} BPM` : 'reading...'})`
+      : 'Heart-rate monitor: not connected';
   }
 }
 
@@ -1104,6 +1297,73 @@ function fillSelect(sel: HTMLSelectElement, auto: string, list: MediaDeviceInfo[
   list.forEach((d, i) => sel.add(new Option(d.label || `${fallback} ${i + 1}`, d.deviceId)));
   sel.value = list.some((d) => d.deviceId === current) ? current : '';
 }
+
+// Bluetooth controls in Settings dialog
+$('btn-settings-connect-bt')?.addEventListener('click', async () => {
+  await audio.unlock().catch(() => {});
+  showBtSettingsMsg('Opening device chooser…');
+  const res = await audio.selectBluetoothOutput();
+  if (res) {
+    update({ audioOutputId: res.deviceId });
+    await audio.setOutput(res.deviceId);
+    await refreshDevices();
+    await refreshSound();
+    audio.earcon('ok');
+    showBtSettingsMsg(`Connected to ${res.label}. Audio is routed to your earphones.`, 'ok');
+    announcer.say(`Connected to ${res.label}.`);
+  } else {
+    await refreshDevices();
+    await refreshSound();
+    showBtSettingsMsg(
+      'No device selected. Pair your Bluetooth headphones in your computer/phone settings, then select them from the list below or tap Detect again.',
+      'bad',
+    );
+    announcer.say('No Bluetooth earphones selected.');
+  }
+});
+
+$('btn-settings-refresh-bt')?.addEventListener('click', async () => {
+  await audio.unlock().catch(() => {});
+  const bt = await audio.autoSelectBluetooth().catch(() => null);
+  if (bt && !settings.audioOutputId) {
+    update({ audioOutputId: bt.deviceId });
+  }
+  await refreshDevices();
+  await refreshSound();
+  audio.earcon('ok');
+  showBtSettingsMsg('Device list refreshed.', 'ok');
+});
+
+$('btn-settings-test-audio')?.addEventListener('click', async () => {
+  await audio.unlock().catch(() => {});
+  if (settings.audioOutputId) await audio.setOutput(settings.audioOutputId).catch(() => {});
+  showBtSettingsMsg('Playing stereo test chimes (left then right)…');
+  await audio.testSound();
+  showBtSettingsMsg('Test chime played. If you did not hear it in your earphones, select them in the dropdown above.', 'ok');
+});
+
+$('btn-settings-hr')?.addEventListener('click', async () => {
+  if (!HeartRateMonitor.supported) {
+    announcer.say('Web Bluetooth is not supported in this browser. Use Chrome or Edge.');
+    showBtSettingsMsg('Web Bluetooth not supported in this browser.', 'bad');
+    return;
+  }
+  try {
+    showBtSettingsMsg('Connecting to Bluetooth heart-rate monitor…');
+    await hr.connect();
+    showBtSettingsMsg(`Connected to ${hr.name}.`, 'ok');
+    announcer.say(`Connected to ${hr.name}.`);
+  } catch (e) {
+    if ((e as Error).name !== 'NotFoundError') {
+      showBtSettingsMsg('Could not connect to heart-rate monitor.', 'bad');
+      announcer.say('Could not connect to heart-rate monitor.');
+    } else {
+      showBtSettingsMsg('Heart-rate pairing cancelled.', 'idle');
+    }
+  }
+  void refreshDevices();
+  void refreshChecks();
+});
 
 $('btn-calibrate').addEventListener('click', () => {
   const m = Number($<HTMLInputElement>('calib-m').value);
