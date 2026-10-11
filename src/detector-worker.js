@@ -80,6 +80,9 @@ export function createWorkerInference({
   let nextId = 1;
   /** @type {any} */
   let worker = null;
+  /** Meta of the last worker reply (model readiness / error), kept beside
+   * the Detection array so the pipeline's runInference contract stays pure. */
+  let lastMeta = { modelReady: false, error: null };
 
   if (typeof createWorker === 'function') {
     worker = createWorker();
@@ -104,6 +107,10 @@ export function createWorkerInference({
     if (!msg || typeof msg.id !== 'number' || !pending.has(msg.id)) return;
     const { resolve } = /** @type {any} */ (pending.get(msg.id));
     pending.delete(msg.id);
+    lastMeta = {
+      modelReady: msg.modelReady === true,
+      error: typeof msg.error === 'string' ? msg.error : null,
+    };
     resolve(msg.detections ?? []);
   }
 
@@ -138,7 +145,12 @@ export function createWorkerInference({
     worker = null;
   }
 
-  return { runInference, terminate };
+  /** Meta of the latest worker reply for status display (never Cues). */
+  function getLastMeta() {
+    return { ...lastMeta };
+  }
+
+  return { runInference, terminate, getLastMeta };
 }
 
 // Real worker bootstrap: only runs inside a worker scope. The model load
@@ -153,6 +165,9 @@ if (typeof self !== 'undefined' && typeof (/** @type {any} */ (self).postMessage
     scope.__echopathDetectorBound = true;
     /** @type {Promise<any> | null} */
     let detectorPromise = null;
+    /** True once the model has answered at least one frame. Sent with
+     * every reply so the main thread can show "loading model…" vs live. */
+    let modelReady = false;
     const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
     function getDetector() {
@@ -174,10 +189,12 @@ if (typeof self !== 'undefined' && typeof (/** @type {any} */ (self).postMessage
         captureAt: msg.captureAt,
         detections: [],
         inferenceMs: clock() - startedAt,
+        modelReady,
         ...extra,
       });
       getDetector().then(
         (detector) => {
+          modelReady = true;
           let raw;
           try {
             raw = detector.detect(msg.frame);

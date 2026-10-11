@@ -175,6 +175,37 @@ export function initApp(doc = document, nav = navigator) {
     if (debugCanvas.height !== h) debugCanvas.height = h;
   }
 
+  /** Last inference timings + worker meta for the debug readout.
+   * @type {number | null} */
+  let lastLatencyMs = null;
+  /** @type {number | null} */
+  let lastInferenceMs = null;
+  let modelReady = false;
+  /** @type {string | null} */
+  let modelError = null;
+
+  /**
+   * Paint the sighted-only overlay from current state. Safe to call any
+   * time: it draws Zone dividers + status immediately (even before the
+   * first inference result) so the Debug toggle visibly does something
+   * while the model is still downloading.
+   */
+  function paintDebug() {
+    if (!debug.isVisible()) return;
+    sizeDebugCanvas();
+    const stats = pipeline ? pipeline.getStats() : null;
+    const sliderOpts = readSliderOpts();
+    const status = modelError ? `model error: ${modelError}` : (modelReady ? null : 'loading model…');
+    debug.render({
+      detections: tracker.getTracks(),
+      fps: stats ? stats.fps : null,
+      latencyMs: lastLatencyMs,
+      inferenceMs: lastInferenceMs,
+      corridorWidth: sliderOpts.corridorWidth,
+      status,
+    });
+  }
+
   function stopDetectionLoop() {
     if (detectRaf !== null && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(detectRaf);
@@ -214,16 +245,18 @@ export function initApp(doc = document, nav = navigator) {
           });
           // Rate-limited Cue set for the Issue 05 cue engine (max three).
           cueSources = selectCueSources(tracks);
-          if (!debug.isVisible()) return;
-          sizeDebugCanvas();
-          const stats = pipeline ? pipeline.getStats() : null;
-          debug.render({
-            detections: tracks,
-            fps: stats ? stats.fps : null,
-            latencyMs,
-            inferenceMs,
-            corridorWidth: sliderOpts.corridorWidth,
-          });
+          lastLatencyMs = latencyMs;
+          lastInferenceMs = inferenceMs;
+          try {
+            const meta = localClient.getLastMeta ? localClient.getLastMeta() : null;
+            if (meta) {
+              if (meta.modelReady) modelReady = true;
+              modelError = meta.error;
+            }
+          } catch {
+            // Status display is best-effort; tracking is unaffected.
+          }
+          paintDebug();
         },
       });
       // ?debug=1 opts the sighted overlay in; default stays off.
@@ -232,6 +265,7 @@ export function initApp(doc = document, nav = navigator) {
         if (params.get('debug') === '1') {
           debug.setVisible(true);
           if (debugSettings) debugSettings.hidden = false;
+          paintDebug();
         }
       } catch {
         // Non-browser / test context: overlay stays off.
@@ -369,7 +403,7 @@ export function initApp(doc = document, nav = navigator) {
     debugToggle.addEventListener('click', () => {
       debug.setVisible(!debug.isVisible());
       if (debugSettings) debugSettings.hidden = !debug.isVisible();
-      sizeDebugCanvas();
+      paintDebug();
     });
   }
 

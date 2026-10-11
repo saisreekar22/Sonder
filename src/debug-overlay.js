@@ -7,13 +7,14 @@
 // setVisible()/render() with a fake 2d context.
 
 /**
- * @param {{ fps: number|null, latencyMs: number|null, inferenceMs?: number|null, count: number }} stats
+ * @param {{ fps: number|null, latencyMs: number|null, inferenceMs?: number|null, count: number, status?: string|null }} stats
  */
-export function formatDebugReadout({ fps, latencyMs, inferenceMs = null, count }) {
+export function formatDebugReadout({ fps, latencyMs, inferenceMs = null, count, status = null }) {
   const fpsText = fps === null || fps === undefined ? '—' : String(Math.round(fps));
   const latText = latencyMs === null || latencyMs === undefined ? '—' : `${Math.round(latencyMs)} ms`;
   const infText = inferenceMs === null || inferenceMs === undefined ? '' : ` · infer ${Math.round(inferenceMs)} ms`;
-  return `FPS ${fpsText} · latency ${latText}${infText} · ${count} detected · nothing detected means no information, never safe`;
+  const statusText = status ? ` · ${status}` : '';
+  return `FPS ${fpsText} · latency ${latText}${infText} · ${count} detected${statusText} · nothing detected means no information, never safe`;
 }
 
 /**
@@ -65,9 +66,9 @@ export function createDebugOverlay({ canvas, readout = null }) {
    * Tracks render with their stable ID (#id) when present so identity
    * can be tuned sighted-only. corridorWidth mirrors the live Corridor
    * slider and moves the divider lines.
-   * @param {{ detections?: any[], fps?: number|null, latencyMs?: number|null, inferenceMs?: number|null, corridorWidth?: number }} frame
+   * @param {{ detections?: any[], fps?: number|null, latencyMs?: number|null, inferenceMs?: number|null, corridorWidth?: number, status?: string|null }} frame
    */
-  function render({ detections = [], fps = null, latencyMs = null, inferenceMs = null, corridorWidth = 1 / 3 } = {}) {
+  function render({ detections = [], fps = null, latencyMs = null, inferenceMs = null, corridorWidth = 1 / 3, status = null } = {}) {
     if (!visible || !canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -99,7 +100,7 @@ export function createDebugOverlay({ canvas, readout = null }) {
       ctx.fillText(`${d.category ?? 'unknown'}${id}${zone}${band} ${Math.round(Number(d.score ?? 0) * 100)}%`, x + 4, y + 14);
     }
 
-    ctx.fillText(`FPS ${fps ?? '—'} · ${latencyMs ?? '—'} ms`, 8, H - 12);
+    ctx.fillText(`FPS ${fps ?? '—'} · ${latencyMs ?? '—'} ms${status ? ` · ${status}` : ''}`, 8, H - 12);
 
     if (readout) {
       readout.textContent = formatDebugReadout({
@@ -107,6 +108,7 @@ export function createDebugOverlay({ canvas, readout = null }) {
         latencyMs,
         inferenceMs,
         count: detections.length,
+        status,
       });
     }
   }
