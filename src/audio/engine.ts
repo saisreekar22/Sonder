@@ -835,14 +835,14 @@ export class AudioEngine {
       else if (kind === 'guide') guidePulse(ctx, pan, t);
       else if (kind === 'looming') loomPulse(ctx, pan, t, p, this.noise);
     }
-    if (kind === 'blocked' || kind === 'guide') {
+    if (kind === 'blocked') {
       const buzz = createBuzz(ctx, pan);
       for (let i = 0; i < 6; i++) {
         const t = t0 + i * 0.22;
         buzz.gate.gain.setValueAtTime(0, t);
-        buzz.gate.gain.linearRampToValueAtTime(1, t + 0.006);
+        buzz.gate.gain.linearRampToValueAtTime(1, t + 0.045);
         buzz.gate.gain.setValueAtTime(1, t + 0.12);
-        buzz.gate.gain.linearRampToValueAtTime(0, t + 0.13);
+        buzz.gate.gain.linearRampToValueAtTime(0, t + 0.18);
       }
       buzz.stop(t0 + 1.4);
     }
@@ -986,7 +986,7 @@ export class AudioEngine {
       v.send.gain.value = 0.06;
       panner.connect(v.send).connect(this.reverbIn);
     }
-    if (s.kind === 'blocked' || s.kind === 'guide') v.buzz = createBuzz(ctx, out);
+    if (s.kind === 'blocked') v.buzz = createBuzz(ctx, out);
     this.position(v, true);
     return v;
   }
@@ -1039,7 +1039,7 @@ export class AudioEngine {
       if (v.buzz && s.continuous) {
         if (!v.gateOpen) {
           v.buzz.gate.gain.cancelScheduledValues(now);
-          v.buzz.gate.gain.setTargetAtTime(1, now, 0.01);
+          v.buzz.gate.gain.setTargetAtTime(1, now, 0.05);
           v.gateOpen = true;
         }
         v.nextPulse = now + 0.05;
@@ -1047,7 +1047,7 @@ export class AudioEngine {
       }
       if (v.buzz && v.gateOpen) {
         v.buzz.gate.gain.cancelScheduledValues(now);
-        v.buzz.gate.gain.setTargetAtTime(0, now, 0.01);
+        v.buzz.gate.gain.setTargetAtTime(0, now, 0.05);
         v.gateOpen = false;
       }
       if (v.nextPulse < now) v.nextPulse = now + 0.005;
@@ -1077,11 +1077,11 @@ export class AudioEngine {
       case 'blocked': {
         const g = v.buzz!.gate.gain;
         const on = Math.min(0.14, period * 0.5);
-        // Rounded on/off (20 ms ramps): a buzz, but not a harsh click.
+        // Soft swells (45/60 ms ramps): a gentle hum, not a harsh click.
         g.setValueAtTime(0, t);
-        g.linearRampToValueAtTime(1, t + 0.02);
+        g.linearRampToValueAtTime(1, t + 0.045);
         g.setValueAtTime(1, t + on);
-        g.linearRampToValueAtTime(0, t + on + 0.03);
+        g.linearRampToValueAtTime(0, t + on + 0.06);
         return;
       }
     }

@@ -126,34 +126,31 @@ export function guidePulse(ctx: BaseAudioContext, dest: AudioNode, t: number): v
 }
 
 /**
- * Blocked path: harsh buzz. A sustained, distorted, beating source behind a
+ * Blocked path: soft low hum. A sustained, mellow consonant source behind a
  * gate; the engine opens the gate in pulses, or holds it open inside 1 m.
+ * Same { gate, stop } API as before, so callers are unchanged — only the
+ * timbre is gentler (sine/triangle fifth, no distortion, lowpassed).
  */
 export function createBuzz(ctx: BaseAudioContext, dest: AudioNode): { gate: GainNode; stop: (t: number) => void } {
   const gate = ctx.createGain();
   gate.gain.value = 0;
-  const shaper = ctx.createWaveShaper();
-  const curve = new Float32Array(256);
-  for (let i = 0; i < 256; i++) {
-    const x = (i / 255) * 2 - 1;
-    curve[i] = Math.tanh(3 * x);
-  }
-  shaper.curve = curve;
   const lp = ctx.createBiquadFilter();
   lp.type = 'lowpass';
-  lp.frequency.value = 2400;
+  lp.frequency.value = 900;
   const level = ctx.createGain();
-  level.gain.value = 0.22;
-  shaper.connect(lp).connect(level).connect(gate).connect(dest);
+  level.gain.value = 0.5;
+  lp.connect(level).connect(gate).connect(dest);
   const oscs = [
-    ['sawtooth', 110],
-    ['sawtooth', 117],
-    ['square', 221],
-  ].map(([type, f]) => {
+    ['sine', 196, 0.5],
+    ['sine', 294, 0.35],
+    ['triangle', 392, 0.18],
+  ].map(([type, f, g]) => {
     const o = ctx.createOscillator();
     o.type = type as OscillatorType;
     o.frequency.value = f as number;
-    o.connect(shaper);
+    const og = ctx.createGain();
+    og.gain.value = g as number;
+    o.connect(og).connect(lp);
     o.start();
     return o;
   });
@@ -197,8 +194,8 @@ export function earcon(ctx: BaseAudioContext, dest: AudioNode, name: EarconName,
     resume: ['triangle', [523, 784], 0.15, 0.55],
     ok: ['sine', [880], 0.1, 0.45],
     attention: ['sine', [1200, 1200], 0.12, 0.4],
-    lowFps: ['square', [220, 220, 220], 0.13, 0.25],
-    warning: ['square', [988, 740, 988, 740], 0.13, 0.35],
+    lowFps: ['triangle', [220, 220, 220], 0.13, 0.25],
+    warning: ['triangle', [988, 740, 988, 740], 0.13, 0.35],
     // Speech fallback for "something is approaching": three fast rising blips.
     approach: ['triangle', [660, 880, 1175], 0.07, 0.5],
     // Heartbeat: a barely-there tick meaning "still working".
