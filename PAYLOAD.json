@@ -1,0 +1,56 @@
+{
+  "measuredAt": "2026-10-11T02:59:27.834Z",
+  "appBytes": 18421,
+  "modelBytes": 0,
+  "totalBytes": 18421,
+  "totalKB": 18,
+  "budgetKB": 10240,
+  "note": "Issue 01: app shell only — model artifact not yet bundled (Issue 03). Budget target ~10 MB (PRD US-1.1).",
+  "appEntries": [
+    {
+      "file": "index.html",
+      "bytes": 1641
+    },
+    {
+      "file": "styles.css",
+      "bytes": 1550
+    },
+    {
+      "file": "manifest.webmanifest",
+      "bytes": 730
+    },
+    {
+      "file": "sw.js",
+      "bytes": 1638
+    },
+    {
+      "file": "src/main.js",
+      "bytes": 4301
+    },
+    {
+      "file": "src/camera.js",
+      "bytes": 1599
+    },
+    {
+      "file": "src/pause.js",
+      "bytes": 1231
+    },
+    {
+      "file": "src/earcons.js",
+      "bytes": 1887
+    },
+    {
+      "file": "src/speech.js",
+      "bytes": 848
+    },
+    {
+      "file": "icons/icon-192.png",
+      "bytes": 656
+    },
+    {
+      "file": "icons/icon-512.png",
+      "bytes": 2340
+    }
+  ],
+  "modelEntries": []
+}

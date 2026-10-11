@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="EchoPath turns your phone camera into directional sound: what is ahead, and which way to step." />
+  <title>EchoPath</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1>EchoPath</h1>
+      <p class="tagline">Hear what is ahead.</p>
+    </header>
+
+    <main>
+      <p id="status" role="status" aria-live="polite" class="status">Press Start, then allow the camera.</p>
+
+      <div class="video-wrap">
+        <video
+          id="camera-view"
+          aria-label="Live rear-camera view"
+          playsinline
+          autoplay
+          muted
+          disablepictureinpicture></video>
+      </div>
+
+      <button id="start-button" type="button" aria-label="Start EchoPath live camera">
+        Start
+      </button>
+
+      <button
+        id="pause-target"
+        type="button"
+        hidden
+        aria-label="Double-tap to pause or resume EchoPath">
+        <span aria-hidden="true">Double-tap anywhere to pause</span>
+      </button>
+    </main>
+  </div>
+
+  <noscript><p>EchoPath needs JavaScript to run the camera and audio.</p></noscript>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
